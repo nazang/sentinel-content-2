@@ -1,0 +1,73 @@
+{
+  "$schema": "https://schema.management.azure.com/schemas/2019-04-01/deploymentTemplate.json#",
+  "contentVersion": "1.0.0.0",
+  "parameters": {
+    "workspace": {
+      "type": "String"
+    }
+  },
+  "resources": [
+    {
+      "id": "[concat(resourceId('Microsoft.OperationalInsights/workspaces/providers', parameters('workspace'), 'Microsoft.SecurityInsights'),'/alertRules/dec7ec5b-8b9a-44d3-bac1-f03296bb394b')]",
+      "name": "[concat(parameters('workspace'),'/Microsoft.SecurityInsights/dec7ec5b-8b9a-44d3-bac1-f03296bb394b')]",
+      "type": "Microsoft.OperationalInsights/workspaces/providers/alertRules",
+      "kind": "Scheduled",
+      "apiVersion": "2023-02-01-preview",
+      "properties": {
+        "displayName": "Gain Code Execution on ADFS Server via Remote WMI Execution",
+        "description": "This query detects instances where an attacker has gained the ability to execute code on an ADFS Server through remote WMI Execution.\nIn order to use this query you need to be collecting Sysmon EventIDs 19, 20, and 21.\nIf you do not have Sysmon data in your workspace this query will raise an error stating:\n     Failed to resolve scalar expression named \"[@Name]\"\nFor more on how WMI was used in Solorigate see https://www.microsoft.com/security/blog/2021/01/20/deep-dive-into-the-solorigate-second-stage-activation-from-sunburst-to-teardrop-and-raindrop/.\nThe query contains some features from the following detections to look for potentially malicious ADFS activity. See them for more details.\n- ADFS Key Export (Sysmon): https://github.com/Azure/Azure-Sentinel/blob/master/Detections/SecurityEvent/ADFSKeyExportSysmon.yaml\n- ADFS DKM Master Key Export: https://github.com/Azure/Azure-Sentinel/blob/master/Detections/MultipleDataSources/ADFS-DKM-MasterKey-Export.yaml",
+        "alertDetailsOverride": null,
+        "customDetails": null,
+        "entityMappings": [
+          {
+            "entityType": "Account",
+            "fieldMappings": [
+              {
+                "columnName": "AccountCustomEntity",
+                "identifier": "FullName"
+              }
+            ]
+          },
+          {
+            "entityType": "Host",
+            "fieldMappings": [
+              {
+                "columnName": "HostCustomEntity",
+                "identifier": "FullName"
+              }
+            ]
+          }
+        ],
+        "eventGroupingSettings": null,
+        "incidentConfiguration": {
+          "createIncident": true,
+          "groupingConfiguration": {
+            "enabled": false,
+            "groupByAlertDetails": null,
+            "groupByCustomDetails": null,
+            "groupByEntities": [],
+            "lookbackDuration": "PT5M",
+            "matchingMethod": "AllEntities",
+            "reopenClosedIncident": false
+          }
+        },
+        "query": "let timeframe = 1d;\n// Adjust for a longer timeframe for identifying ADFS Servers\nlet lookback = 6d;\n// Identify ADFS Servers\nlet ADFS_Servers = (\nEvent\n| where TimeGenerated > ago(timeframe+lookback)\n| where Source == \"Microsoft-Windows-Sysmon\"\n| where EventID == 1\n| extend EventData = parse_xml(EventData).DataItem.EventData.Data\n| mv-expand bagexpansion=array EventData\n| evaluate bag_unpack(EventData)\n| extend Key=tostring(['@Name']), Value=['#text']\n| evaluate pivot(Key, any(Value), TimeGenerated, Source, EventLog, Computer, EventLevel, EventLevelName, UserName, RenderedDescription, MG, ManagementGroupName, Type, _ResourceId)\n| extend process = split(Image, '\\\\', -1)[-1]\n| where process =~ \"Microsoft.IdentityServer.ServiceHost.exe\"\n| distinct Computer\n| union isfuzzy=true (\nSecurityEvent\n| where TimeGenerated > ago(timeframe+lookback)\n| where EventID == 4688 and SubjectLogonId != \"0x3e4\"\n| where ProcessName has \"Microsoft.IdentityServer.ServiceHost.exe\"\n| distinct Computer\n)\n| distinct Computer);\n(union isfuzzy=true\n(\nSecurityEvent\n| where TimeGenerated > ago(timeframe)\n| where Computer in~ (ADFS_Servers)\n| where ParentProcessName has 'wmiprvse.exe'\n// Looking for rundll32.exe is based on intel from the blog linked in the description\n// This can be commented out or altered to filter out known internal uses\n| where CommandLine has_any ('rundll32') \n| project TimeGenerated, TargetAccount, CommandLine, Computer, Account, TargetLogonId\n| extend timestamp = TimeGenerated, HostCustomEntity = Computer, AccountCustomEntity = Account\n// Search for recent logons to identify lateral movement\n| join kind= inner\n(SecurityEvent\n| where TimeGenerated > ago(timeframe)\n| where EventID == 4624 and LogonType == 3\n| where Account !endswith \"$\"\n| project TargetLogonId\n) on TargetLogonId\n),\n(\nEvent\n| where TimeGenerated > ago(timeframe)\n| where Source == \"Microsoft-Windows-Sysmon\"\n// Check for WMI Events\n| where Computer in~ (ADFS_Servers) and EventID in (19, 20, 21)\n| extend EventData = parse_xml(EventData).DataItem.EventData.Data\n| mv-expand bagexpansion=array EventData\n| evaluate bag_unpack(EventData)\n| extend Key=tostring(['@Name']), Value=['#text']\n| evaluate pivot(Key, any(Value), TimeGenerated, Source, EventLog, Computer, EventLevel, EventLevelName, UserName, RenderedDescription, MG, ManagementGroupName, Type, _ResourceId)\n| project TimeGenerated, EventType, Image, Computer, UserName\n| extend timestamp = TimeGenerated, HostCustomEntity = Computer, AccountCustomEntity = UserName\n)\n)\n",
+        "queryPeriod": "P7D",
+        "queryFrequency": "P1D",
+        "sentinelEntitiesMappings": null,
+        "severity": "Medium",
+        "suppressionDuration": "PT1H",
+        "suppressionEnabled": false,
+        "tactics": [
+          "LateralMovement"
+        ],
+        "techniques": null,
+        "templateVersion": null,
+        "triggerOperator": "GreaterThan",
+        "triggerThreshold": 0,
+        "alertRuleTemplateName": null,
+        "enabled": false
+      }
+    }
+  ]
+}
