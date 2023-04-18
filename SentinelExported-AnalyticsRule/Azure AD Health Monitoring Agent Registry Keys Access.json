@@ -1,0 +1,54 @@
+{
+  "$schema": "https://schema.management.azure.com/schemas/2019-04-01/deploymentTemplate.json#",
+  "contentVersion": "1.0.0.0",
+  "parameters": {
+    "workspace": {
+      "type": "String"
+    }
+  },
+  "resources": [
+    {
+      "id": "[concat(resourceId('Microsoft.OperationalInsights/workspaces/providers', parameters('workspace'), 'Microsoft.SecurityInsights'),'/alertRules/3981cccc-4c51-44c7-867b-660e88901d91')]",
+      "name": "[concat(parameters('workspace'),'/Microsoft.SecurityInsights/3981cccc-4c51-44c7-867b-660e88901d91')]",
+      "type": "Microsoft.OperationalInsights/workspaces/providers/alertRules",
+      "kind": "Scheduled",
+      "apiVersion": "2023-02-01-preview",
+      "properties": {
+        "displayName": "Azure AD Health Monitoring Agent Registry Keys Access",
+        "description": "This detection uses Windows security events to detect suspicious access attempts to the registry key of Azure AD Health monitoring agent.\nThis detection requires an access control entry (ACE) on the system access control list (SACL) of the following securable object HKLM\\SOFTWARE\\Microsoft\\Microsoft Online\\Reporting\\MonitoringAgent.\nYou can find more information in here https://github.com/OTRF/Set-AuditRule/blob/master/rules/registry/aad_connect_health_monitoring_agent.yml\n",
+        "alertDetailsOverride": null,
+        "customDetails": null,
+        "entityMappings": null,
+        "eventGroupingSettings": null,
+        "incidentConfiguration": {
+          "createIncident": true,
+          "groupingConfiguration": {
+            "enabled": false,
+            "groupByAlertDetails": null,
+            "groupByCustomDetails": null,
+            "groupByEntities": [],
+            "lookbackDuration": "PT5M",
+            "matchingMethod": "AllEntities",
+            "reopenClosedIncident": false
+          }
+        },
+        "query": "// ADHealth Monitoring Agent Registry Key\nlet aadHealthMonAgentRegKey = \"\\\\REGISTRY\\\\MACHINE\\\\SOFTWARE\\\\Microsoft\\\\Microsoft Online\\\\Reporting\\\\MonitoringAgent\";\n// Filter out known processes\nlet aadConnectHealthProcs = dynamic ([\n    'Microsoft.Identity.Health.Adfs.DiagnosticsAgent.exe',\n    'Microsoft.Identity.Health.Adfs.InsightsService.exe',\n    'Microsoft.Identity.Health.Adfs.MonitoringAgent.Startup.exe',\n    'Microsoft.Identity.Health.Adfs.PshSurrogate.exe',\n    'Microsoft.Identity.Health.Common.Clients.ResourceMonitor.exe'\n]);\n(union isfuzzy=true\n(\nSecurityEvent\n| where EventID == '4656'\n| extend EventData = parse_xml(EventData).EventData.Data\n| mv-expand bagexpansion=array EventData\n| evaluate bag_unpack(EventData)\n| extend Key = tostring(column_ifexists('@Name', \"\")), Value = column_ifexists('#text', \"\")\n| evaluate pivot(Key, any(Value), TimeGenerated, Computer, EventID)\n| extend SubjectUserName = column_ifexists(\"SubjectUserName\", \"\"),\n    SubjectDomainName = column_ifexists(\"SubjectDomainName\", \"\"),\n    ObjectName = column_ifexists(\"ObjectName\", \"\"),\n    ObjectType = column_ifexists(\"ObjectType\", \"\"),\n    ProcessName = column_ifexists(\"ProcessName\", \"\")\n| extend Process = split(ProcessName, '\\\\', -1)[-1],\n    Account = strcat(SubjectDomainName, \"\\\\\", SubjectUserName)\n| where ObjectType == 'Key'\n| where ObjectName == aadHealthMonAgentRegKey\n| where Process !in (aadConnectHealthProcs)\n),\n(\nSecurityEvent\n| where EventID == '4663'\n| extend Process = split(ProcessName, '\\\\', -1)[-1]\n| where ObjectType == 'Key'\n| where ObjectName == aadHealthMonAgentRegKey\n| where Process !in (aadConnectHealthProcs)\n)\n)\n// You can filter out potential machine accounts\n//| where AccountType != 'Machine'\n| extend timestamp = TimeGenerated, AccountCustomEntity = Account, HostCustomEntity = Computer\n| summarize count() by ProcessName\n",
+        "queryPeriod": "P1D",
+        "queryFrequency": "P1D",
+        "sentinelEntitiesMappings": null,
+        "severity": "Medium",
+        "suppressionDuration": "PT1H",
+        "suppressionEnabled": false,
+        "tactics": [
+          "Collection"
+        ],
+        "techniques": null,
+        "templateVersion": null,
+        "triggerOperator": "GreaterThan",
+        "triggerThreshold": 0,
+        "alertRuleTemplateName": null,
+        "enabled": false
+      }
+    }
+  ]
+}
