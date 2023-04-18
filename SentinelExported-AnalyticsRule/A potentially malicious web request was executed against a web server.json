@@ -1,0 +1,64 @@
+{
+  "$schema": "https://schema.management.azure.com/schemas/2019-04-01/deploymentTemplate.json#",
+  "contentVersion": "1.0.0.0",
+  "parameters": {
+    "workspace": {
+      "type": "String"
+    }
+  },
+  "resources": [
+    {
+      "id": "[concat(resourceId('Microsoft.OperationalInsights/workspaces/providers', parameters('workspace'), 'Microsoft.SecurityInsights'),'/alertRules/d11e8c1f-49f2-49aa-a051-02af75d7f725')]",
+      "name": "[concat(parameters('workspace'),'/Microsoft.SecurityInsights/d11e8c1f-49f2-49aa-a051-02af75d7f725')]",
+      "type": "Microsoft.OperationalInsights/workspaces/providers/alertRules",
+      "kind": "Scheduled",
+      "apiVersion": "2023-02-01-preview",
+      "properties": {
+        "displayName": "A potentially malicious web request was executed against a web server",
+        "description": "Detects unobstructed Web Application Firewall (WAF) activity in sessions where the WAF blocked incoming requests by computing the \nratio between blocked requests and unobstructed WAF requests in these sessions (BlockvsSuccessRatio metric). A high ratio value for \na given client IP and hostname calls for further investigation of the WAF data in that session, due to the significantly high number \nof blocked requests and a few unobstructed logs which may be malicious but have passed undetected through the WAF. The successCode \nvariable defines what the detection thinks is a successful status code, and should be altered to fit the environment.",
+        "alertDetailsOverride": null,
+        "customDetails": null,
+        "entityMappings": [
+          {
+            "entityType": "IP",
+            "fieldMappings": [
+              {
+                "columnName": "IPCustomEntity",
+                "identifier": "Address"
+              }
+            ]
+          }
+        ],
+        "eventGroupingSettings": null,
+        "incidentConfiguration": {
+          "createIncident": true,
+          "groupingConfiguration": {
+            "enabled": false,
+            "groupByAlertDetails": null,
+            "groupByCustomDetails": null,
+            "groupByEntities": [],
+            "lookbackDuration": "PT5M",
+            "matchingMethod": "AllEntities",
+            "reopenClosedIncident": false
+          }
+        },
+        "query": "let mode = 'Blocked'; \nlet successCode = dynamic(['200', '101','204', '400','504','304','401','500']);\nlet minTime = ago(1d);\nlet maxSessionWindow = 1h;\nlet sessionBin = maxSessionWindow/2.0;\nAzureDiagnostics\n| where TimeGenerated > minTime\n| where Category == 'ApplicationGatewayFirewallLog'\n| where action_s == mode\n| sort by hostname_s asc, clientIp_s asc, TimeGenerated asc\n| extend SessionStarted = row_window_session(TimeGenerated, maxSessionWindow, 10m, ((clientIp_s != prev(clientIp_s)) or (hostname_s != prev(hostname_s))))\n| summarize minTime = min(TimeGenerated), maxTime = max(TimeGenerated), SessionBlockedCount=count()  by hostname_s, clientIp_s, SessionStarted\n| extend duration = maxTime - minTime\n| extend TimeKey = bin(SessionStarted, sessionBin)\n| join kind = inner(\nAzureDiagnostics\n| where TimeGenerated > minTime\n| where Category == 'ApplicationGatewayAccessLog'\n| where httpStatus_d in (successCode) or isempty(httpStatus_d)\n| extend TimeKey = range(bin(TimeGenerated-maxSessionWindow, sessionBin), bin(TimeGenerated, sessionBin), sessionBin)\n| mv-expand TimeKey to typeof(datetime)\n) on $left.hostname_s == $right.host_s, $left.clientIp_s == $right.clientIP_s, TimeKey\n| where (TimeGenerated - SessionStarted) between (0m .. duration)\n| extend originalRequestUriWithArgs_s = column_ifexists(\"originalRequestUriWithArgs_s\", \"\")\n| extend serverStatus_s = column_ifexists(\"serverStatus_s\", \"\")\n| extend timestamp = SessionStarted, IPCustomEntity = clientIP_s\n| summarize SuccessfulAccessLogCount = count(), UserAgents = make_set(userAgent_s), RequestURIs = make_set(requestUri_s) , OriginalRequestURIs = make_set(originalRequestUriWithArgs_s), \nSuccessCodes = make_set(httpStatus_d), SuccessCodes_BackendServer = make_set(serverStatus_s) by timestamp, hostname_s, IPCustomEntity, SessionBlockedCount\n| extend BlockvsSuccessRatio = SessionBlockedCount/SuccessfulAccessLogCount\n| sort by BlockvsSuccessRatio desc, timestamp asc\n| where SessionBlockedCount > SuccessfulAccessLogCount \n",
+        "queryPeriod": "P1D",
+        "queryFrequency": "P1D",
+        "sentinelEntitiesMappings": null,
+        "severity": "Medium",
+        "suppressionDuration": "PT1H",
+        "suppressionEnabled": false,
+        "tactics": [
+          "InitialAccess"
+        ],
+        "techniques": null,
+        "templateVersion": null,
+        "triggerOperator": "GreaterThan",
+        "triggerThreshold": 0,
+        "alertRuleTemplateName": null,
+        "enabled": false
+      }
+    }
+  ]
+}
