@@ -1,0 +1,74 @@
+{
+  "$schema": "https://schema.management.azure.com/schemas/2019-04-01/deploymentTemplate.json#",
+  "contentVersion": "1.0.0.0",
+  "parameters": {
+    "workspace": {
+      "type": "String"
+    }
+  },
+  "resources": [
+    {
+      "id": "[concat(resourceId('Microsoft.OperationalInsights/workspaces/providers', parameters('workspace'), 'Microsoft.SecurityInsights'),'/alertRules/05cbb563-d847-42dc-af92-c4cb6c959ead')]",
+      "name": "[concat(parameters('workspace'),'/Microsoft.SecurityInsights/05cbb563-d847-42dc-af92-c4cb6c959ead')]",
+      "type": "Microsoft.OperationalInsights/workspaces/providers/alertRules",
+      "kind": "Scheduled",
+      "apiVersion": "2023-02-01-preview",
+      "properties": {
+        "displayName": "User account added to built in domain local or global group",
+        "description": "Identifies when a user account has been added to a privileged built in domain local group or global group \nsuch as the Enterprise Admins, Cert Publishers or DnsAdmins. Be sure to verify this is an expected addition.",
+        "alertDetailsOverride": null,
+        "customDetails": null,
+        "entityMappings": [
+          {
+            "entityType": "Account",
+            "fieldMappings": [
+              {
+                "columnName": "AccountCustomEntity",
+                "identifier": "FullName"
+              }
+            ]
+          },
+          {
+            "entityType": "Host",
+            "fieldMappings": [
+              {
+                "columnName": "HostCustomEntity",
+                "identifier": "FullName"
+              }
+            ]
+          }
+        ],
+        "eventGroupingSettings": null,
+        "incidentConfiguration": {
+          "createIncident": true,
+          "groupingConfiguration": {
+            "enabled": false,
+            "groupByAlertDetails": null,
+            "groupByCustomDetails": null,
+            "groupByEntities": [],
+            "lookbackDuration": "PT5M",
+            "matchingMethod": "AllEntities",
+            "reopenClosedIncident": false
+          }
+        },
+        "query": "\n// For AD SID mappings - https://docs.microsoft.com/windows/security/identity-protection/access-control/active-directory-security-groups\nlet WellKnownLocalSID = \"S-1-5-32-5[0-9][0-9]$\";\nlet WellKnownGroupSID = \"S-1-5-21-[0-9]*-[0-9]*-[0-9]*-5[0-9][0-9]$|S-1-5-21-[0-9]*-[0-9]*-[0-9]*-1102$|S-1-5-21-[0-9]*-[0-9]*-[0-9]*-1103$|S-1-5-21-[0-9]*-[0-9]*-[0-9]*-498$|S-1-5-21-[0-9]*-[0-9]*-[0-9]*-1000$\";\nSecurityEvent \n// When MemberName contains '-' this indicates addition of a group to a group\n| where AccountType == \"User\" and MemberName != \"-\"\n// 4728 - A member was added to a security-enabled global group\n// 4732 - A member was added to a security-enabled local group\n// 4756 - A member was added to a security-enabled universal group\n| where EventID in (4728, 4732, 4756)   \n| where TargetSid matches regex WellKnownLocalSID or TargetSid matches regex WellKnownGroupSID\n// Exclude Remote Desktop Users group: S-1-5-32-555\n| where TargetSid !in (\"S-1-5-32-555\")\n| extend SimpleMemberName = tostring(split(tostring(split(MemberName, \",\")[0]),\"=\")[1])\n| project StartTimeUtc = TimeGenerated, EventID, Activity, Computer, SimpleMemberName, MemberName, MemberSid, TargetUserName, TargetDomainName, TargetSid, UserPrincipalName, SubjectUserName, SubjectUserSid\n| extend timestamp = StartTimeUtc, AccountCustomEntity = SimpleMemberName, HostCustomEntity = Computer\n",
+        "queryPeriod": "P1D",
+        "queryFrequency": "P1D",
+        "sentinelEntitiesMappings": null,
+        "severity": "Low",
+        "suppressionDuration": "PT1H",
+        "suppressionEnabled": false,
+        "tactics": [
+          "Persistence",
+          "PrivilegeEscalation"
+        ],
+        "techniques": null,
+        "templateVersion": null,
+        "triggerOperator": "GreaterThan",
+        "triggerThreshold": 0,
+        "alertRuleTemplateName": null,
+        "enabled": false
+      }
+    }
+  ]
+}
