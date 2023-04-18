@@ -1,0 +1,54 @@
+{
+  "$schema": "https://schema.management.azure.com/schemas/2019-04-01/deploymentTemplate.json#",
+  "contentVersion": "1.0.0.0",
+  "parameters": {
+    "workspace": {
+      "type": "String"
+    }
+  },
+  "resources": [
+    {
+      "id": "[concat(resourceId('Microsoft.OperationalInsights/workspaces/providers', parameters('workspace'), 'Microsoft.SecurityInsights'),'/alertRules/68cd6063-b91e-4a3f-a78f-c1ce53447031')]",
+      "name": "[concat(parameters('workspace'),'/Microsoft.SecurityInsights/68cd6063-b91e-4a3f-a78f-c1ce53447031')]",
+      "type": "Microsoft.OperationalInsights/workspaces/providers/alertRules",
+      "kind": "Scheduled",
+      "apiVersion": "2023-02-01-preview",
+      "properties": {
+        "displayName": "Vectra AI Detect - Command and Control Detection with High Severity",
+        "description": "Identifies detections with a threat score superior to 7.0 in the category Command and Control. This is consider has a high severity alert and should be investigated. \nThe Severity is a mapping with the Threat score assigned to a detection. It ranges between 0 and 10. \nThe severity_threshold can be adjusted as desired.",
+        "alertDetailsOverride": null,
+        "customDetails": null,
+        "entityMappings": null,
+        "eventGroupingSettings": null,
+        "incidentConfiguration": {
+          "createIncident": true,
+          "groupingConfiguration": {
+            "enabled": false,
+            "groupByAlertDetails": null,
+            "groupByCustomDetails": null,
+            "groupByEntities": [],
+            "lookbackDuration": "PT5M",
+            "matchingMethod": "AllEntities",
+            "reopenClosedIncident": false
+          }
+        },
+        "query": "//default threshold is 7 (meaning a threat score of 70)\nlet severity_threshold = 7.0;\nCommonSecurityLog\n| where DeviceVendor == \"Vectra Networks\"\n| where DeviceProduct == \"X Series\"\n| where DeviceEventClassID != \"campaigns\" and DeviceEventClassID != \"hsc\" and DeviceEventClassID != \"audit\" and DeviceEventClassID != \"health\" and DeviceEventClassID != \"asc\" and SourceHostName != \"\"\n| extend Category = extract(\"cat=(.+?);\", 1, AdditionalExtensions) \n| project-rename threat_score = FlexNumber1\n| project-rename certainty_score = FlexNumber2\n| project-rename vectra_URL = DeviceCustomString4\n| project-rename detection_name = DeviceEventClassID\n| where todecimal(LogSeverity) >= severity_threshold and Category == \"COMMAND & CONTROL\"\n| summarize arg_max(threat_score, *) by SourceHostName, Activity\n| sort by TimeGenerated\n| project SourceHostName, Category, Activity, LogSeverity \n",
+        "queryPeriod": "PT1H",
+        "queryFrequency": "PT1H",
+        "sentinelEntitiesMappings": null,
+        "severity": "High",
+        "suppressionDuration": "PT1H",
+        "suppressionEnabled": false,
+        "tactics": [
+          "CommandAndControl"
+        ],
+        "techniques": null,
+        "templateVersion": null,
+        "triggerOperator": "GreaterThan",
+        "triggerThreshold": 0,
+        "alertRuleTemplateName": null,
+        "enabled": false
+      }
+    }
+  ]
+}
