@@ -1,0 +1,82 @@
+{
+  "$schema": "https://schema.management.azure.com/schemas/2019-04-01/deploymentTemplate.json#",
+  "contentVersion": "1.0.0.0",
+  "parameters": {
+    "workspace": {
+      "type": "String"
+    }
+  },
+  "resources": [
+    {
+      "id": "[concat(resourceId('Microsoft.OperationalInsights/workspaces/providers', parameters('workspace'), 'Microsoft.SecurityInsights'),'/alertRules/37e1a227-052a-4619-8e2c-02aff51f7adb')]",
+      "name": "[concat(parameters('workspace'),'/Microsoft.SecurityInsights/37e1a227-052a-4619-8e2c-02aff51f7adb')]",
+      "type": "Microsoft.OperationalInsights/workspaces/providers/alertRules",
+      "kind": "Scheduled",
+      "apiVersion": "2023-02-01-preview",
+      "properties": {
+        "displayName": "(Preview) TI map IP entity to Dns Events (Normalized DNS)",
+        "description": "Identifies a match in DNS events from any IP IOC from TI\nTo use this analytics rule, make sure you have deployed the [ASIM normalization parsers](https://aka.ms/AzSentinelDns).",
+        "alertDetailsOverride": null,
+        "customDetails": null,
+        "entityMappings": [
+          {
+            "entityType": "Host",
+            "fieldMappings": [
+              {
+                "columnName": "HostCustomEntity",
+                "identifier": "FullName"
+              }
+            ]
+          },
+          {
+            "entityType": "IP",
+            "fieldMappings": [
+              {
+                "columnName": "IPCustomEntity",
+                "identifier": "Address"
+              }
+            ]
+          },
+          {
+            "entityType": "URL",
+            "fieldMappings": [
+              {
+                "columnName": "URLCustomEntity",
+                "identifier": "Url"
+              }
+            ]
+          }
+        ],
+        "eventGroupingSettings": null,
+        "incidentConfiguration": {
+          "createIncident": true,
+          "groupingConfiguration": {
+            "enabled": false,
+            "groupByAlertDetails": null,
+            "groupByCustomDetails": null,
+            "groupByEntities": [],
+            "lookbackDuration": "PT5M",
+            "matchingMethod": "AllEntities",
+            "reopenClosedIncident": false
+          }
+        },
+        "query": "let dt_lookBack = 1h;\nlet ioc_lookBack = 14d;\nlet IP_TI = (ThreatIntelligenceIndicator\n| where TimeGenerated >= ago(ioc_lookBack) and ExpirationDateTime > now()\n| where Active == true\n// Picking up only IOC's that contain the entities we want\n| where isnotempty(NetworkIP) or isnotempty(EmailSourceIpAddress) or isnotempty(NetworkDestinationIP) or isnotempty(NetworkSourceIP)\n// As there is potentially more than 1 indicator type for matching IP, taking NetworkIP first, then others if that is empty.\n// Taking the first non-empty value based on potential IOC match availability\n| extend TI_ipEntity = coalesce(NetworkIP, NetworkDestinationIP, NetworkSourceIP,EmailSourceIpAddress,\"\")\n| summarize LatestIndicatorTime = arg_max(TimeGenerated, *) by IndicatorId);\nlet TI_IP_List=IP_TI | summarize make_set( TI_ipEntity);\nimDns(starttime=ago(dt_lookBack), response_has_any_prefix=todynamic(toscalar(TI_IP_List)))\n    | extend tilist = toscalar(TI_IP_List)\n    | mv-expand tilist\n    | extend SingleIP=tostring(tilist)\n    | project-away tilist\n    | where has_ipv4(DnsResponseName, SingleIP)\n    | extend DNS_TimeGenerated = TimeGenerated\n| join IP_TI\n      on $left.SingleIP == $right.TI_ipEntity\n| where DNS_TimeGenerated >= TimeGenerated and DNS_TimeGenerated < ExpirationDateTime\n| project LatestIndicatorTime, Description, ActivityGroupNames, IndicatorId, ThreatType, Url, ExpirationDateTime, ConfidenceScore, DNS_TimeGenerated,\nTI_ipEntity, Dvc, EventId, SubType, SrcIpAddr, DnsQuery, DnsResponseName, NetworkIP, NetworkDestinationIP, NetworkSourceIP, EmailSourceIpAddress\n| extend timestamp = DNS_TimeGenerated, IPCustomEntity = TI_ipEntity, HostCustomEntity = Dvc, URLCustomEntity = Url\n",
+        "queryPeriod": "P14D",
+        "queryFrequency": "PT1H",
+        "sentinelEntitiesMappings": null,
+        "severity": "Medium",
+        "suppressionDuration": "PT1H",
+        "suppressionEnabled": false,
+        "tactics": [
+          "Impact"
+        ],
+        "techniques": null,
+        "templateVersion": null,
+        "triggerOperator": "GreaterThan",
+        "triggerThreshold": 0,
+        "alertRuleTemplateName": null,
+        "enabled": false
+      }
+    }
+  ]
+}
