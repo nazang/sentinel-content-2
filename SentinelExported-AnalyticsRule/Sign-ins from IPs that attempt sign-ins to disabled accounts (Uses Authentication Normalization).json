@@ -1,0 +1,65 @@
+{
+  "$schema": "https://schema.management.azure.com/schemas/2019-04-01/deploymentTemplate.json#",
+  "contentVersion": "1.0.0.0",
+  "parameters": {
+    "workspace": {
+      "type": "String"
+    }
+  },
+  "resources": [
+    {
+      "id": "[concat(resourceId('Microsoft.OperationalInsights/workspaces/providers', parameters('workspace'), 'Microsoft.SecurityInsights'),'/alertRules/7b875a51-72e6-49d2-97b0-f88e43c5d9a0')]",
+      "name": "[concat(parameters('workspace'),'/Microsoft.SecurityInsights/7b875a51-72e6-49d2-97b0-f88e43c5d9a0')]",
+      "type": "Microsoft.OperationalInsights/workspaces/providers/alertRules",
+      "kind": "Scheduled",
+      "apiVersion": "2023-02-01-preview",
+      "properties": {
+        "displayName": "Sign-ins from IPs that attempt sign-ins to disabled accounts (Uses Authentication Normalization)",
+        "description": "Identifies IPs with failed attempts to sign in to one or more disabled accounts signed in successfully to another account.\nTo use this analytics rule, make sure you have deployed the [ASIM normalization parsers](https://aka.ms/AzSentinelAuthentication)",
+        "alertDetailsOverride": null,
+        "customDetails": null,
+        "entityMappings": [
+          {
+            "entityType": "IP",
+            "fieldMappings": [
+              {
+                "columnName": "IPCustomEntity",
+                "identifier": "Address"
+              }
+            ]
+          }
+        ],
+        "eventGroupingSettings": null,
+        "incidentConfiguration": {
+          "createIncident": true,
+          "groupingConfiguration": {
+            "enabled": false,
+            "groupByAlertDetails": null,
+            "groupByCustomDetails": null,
+            "groupByEntities": [],
+            "lookbackDuration": "PT5M",
+            "matchingMethod": "AllEntities",
+            "reopenClosedIncident": false
+          }
+        },
+        "query": "imAuthentication\n| where EventResult =='Failure'\n| where EventResultDetails == 'User disabled'\n| summarize StartTime=min(EventStartTime), EndTime=max(EventEndTime), disabledAccountLoginAttempts = count()\n      , disabledAccountsTargeted = dcount(TargetUsername), disabledAccountSet = make_set(TargetUsername)\n      , applicationsTargeted = dcount(TargetAppName)\n      , applicationSet = make_set(TargetAppName) \n      by SrcDvcIpAddr, Type\n| order by disabledAccountLoginAttempts desc\n| join kind=leftouter \n    (\n    // Consider these IPs suspicious - and alert any related  successful sign-ins\n    imAuthentication\n    | where EventResult=='Success'\n    | summarize successfulAccountSigninCount = dcount(TargetUsername), successfulAccountSigninSet = makeset(TargetUsername, 15) by SrcDvcIpAddr, Type\n    // Assume IPs associated with sign-ins from 100+ distinct user accounts are safe\n    | where successfulAccountSigninCount < 100\n    )\n    on SrcDvcIpAddr\n| where isnotempty(successfulAccountSigninCount)\n| project StartTime, EndTime, SrcDvcIpAddr, disabledAccountLoginAttempts, disabledAccountsTargeted, disabledAccountSet, applicationSet, \nsuccessfulAccountSigninCount, successfulAccountSigninSet, Type\n| order by disabledAccountLoginAttempts\n| extend timestamp = StartTime, IPCustomEntity = SrcDvcIpAddr\n",
+        "queryPeriod": "P1D",
+        "queryFrequency": "P1D",
+        "sentinelEntitiesMappings": null,
+        "severity": "Medium",
+        "suppressionDuration": "PT1H",
+        "suppressionEnabled": false,
+        "tactics": [
+          "InitialAccess",
+          "Persistence"
+        ],
+        "techniques": null,
+        "templateVersion": null,
+        "triggerOperator": "GreaterThan",
+        "triggerThreshold": 0,
+        "alertRuleTemplateName": null,
+        "enabled": false
+      }
+    }
+  ]
+}
