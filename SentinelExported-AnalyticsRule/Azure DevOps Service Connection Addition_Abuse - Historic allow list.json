@@ -1,0 +1,65 @@
+{
+  "$schema": "https://schema.management.azure.com/schemas/2019-04-01/deploymentTemplate.json#",
+  "contentVersion": "1.0.0.0",
+  "parameters": {
+    "workspace": {
+      "type": "String"
+    }
+  },
+  "resources": [
+    {
+      "id": "[concat(resourceId('Microsoft.OperationalInsights/workspaces/providers', parameters('workspace'), 'Microsoft.SecurityInsights'),'/alertRules/a5a51764-5b20-451e-a5bf-6e1c23fd5083')]",
+      "name": "[concat(parameters('workspace'),'/Microsoft.SecurityInsights/a5a51764-5b20-451e-a5bf-6e1c23fd5083')]",
+      "type": "Microsoft.OperationalInsights/workspaces/providers/alertRules",
+      "kind": "Scheduled",
+      "apiVersion": "2023-02-01-preview",
+      "properties": {
+        "displayName": "Azure DevOps Service Connection Addition/Abuse - Historic allow list",
+        "description": "This detection builds an allow list of historic service connection use by Builds and Releases and compares to recent history, flagging growth of service connection use which are not manually included in the allow list and \nnot historically included in the allow list Build/Release runs.  This is to determine if someone is hijacking a build/release and adding many service connections in order to abuse or dump credentials from service connections.",
+        "alertDetailsOverride": null,
+        "customDetails": null,
+        "entityMappings": [
+          {
+            "entityType": "Account",
+            "fieldMappings": [
+              {
+                "columnName": "AccountCustomEntity",
+                "identifier": "FullName"
+              }
+            ]
+          }
+        ],
+        "eventGroupingSettings": null,
+        "incidentConfiguration": {
+          "createIncident": true,
+          "groupingConfiguration": {
+            "enabled": false,
+            "groupByAlertDetails": null,
+            "groupByCustomDetails": null,
+            "groupByEntities": [],
+            "lookbackDuration": "PT5M",
+            "matchingMethod": "AllEntities",
+            "reopenClosedIncident": false
+          }
+        },
+        "query": "\nlet starttime = 14d;\nlet endtime = 6h;\n// Ignore Build/Releases with less/equal this number\nlet ServiceConnectionThreshold = 3;\n// New Connections need to exhibit execution of more \"new\" connections than this number.\nlet NewConnectionThreshold = 1;\n// List of Builds/Releases to ignore in your space\nlet BypassDefIds = datatable(DefId:string, Type:string, ProjectName:string)\n[\n//\"103\", \"Release\", \"ProjectA\",\n//\"42\", \"Release\", \"ProjectB\",\n//\"122\", \"Build\", \"ProjectB\"\n];\nlet HistoricDefs = AzureDevOpsAuditing\n| where TimeGenerated between (ago(starttime) .. ago(endtime))\n| where OperationName == \"Library.ServiceConnectionExecuted\" \n| extend DefId = tostring(Data.DefinitionId), Type = tostring(Data.PlanType), ConnectionId = tostring(Data.ConnectionId)\n| summarize HistoricCount = dcount(tostring(ConnectionId)), ConnectionNames = make_set(tostring(Data.ConnectionName)) \n  by DefId = tostring(DefId), Type = tostring(Type), ProjectId, ProjectName, ActorUPN;\nAzureDevOpsAuditing\n| where TimeGenerated >= ago(endtime)\n| where OperationName == \"Library.ServiceConnectionExecuted\" \n| extend DefId = tostring(Data.DefinitionId), Type = tostring(Data.PlanType), ConnectionId = tostring(Data.ConnectionId)\n| parse ScopeDisplayName with OrganizationName ' (Organization)'\n| summarize CurrentCount = dcount(tostring(ConnectionId)), ConnectionNames = make_set(tostring(Data.ConnectionName)), StartTime = min(TimeGenerated), EndTime = max(TimeGenerated) \n  by OrganizationName, DefId = tostring(DefId), Type = tostring(Type), ProjectId, ProjectName, ActorUPN\n| where CurrentCount > ServiceConnectionThreshold\n| join (HistoricDefs) on ProjectId, DefId, Type, ActorUPN\n| join kind=anti BypassDefIds on $left.DefId==$right.DefId and $left.Type == $right.Type and $left.ProjectName == $right.ProjectName\n| extend link = iff(\nType == \"Build\", strcat('https://dev.azure.com/', OrganizationName, '/', ProjectName, '/_build?definitionId=', DefId),\nstrcat('https://dev.azure.com/', OrganizationName, '/', ProjectName, '/_release?_a=releases&view=mine&definitionId=', DefId))\n| where CurrentCount >= HistoricCount + NewConnectionThreshold\n| project StartTime, OrganizationName, ProjectName, DefId, link, RecentDistinctServiceConnections = CurrentCount, HistoricDistinctServiceConnections = HistoricCount, \n  RecentConnections = ConnectionNames, HistoricConnections = ConnectionNames1, ActorUPN\n| extend timestamp = StartTime, AccountCustomEntity = ActorUPN\n",
+        "queryPeriod": "P14D",
+        "queryFrequency": "PT6H",
+        "sentinelEntitiesMappings": null,
+        "severity": "Medium",
+        "suppressionDuration": "PT1H",
+        "suppressionEnabled": false,
+        "tactics": [
+          "Persistence",
+          "Impact"
+        ],
+        "techniques": null,
+        "templateVersion": null,
+        "triggerOperator": "GreaterThan",
+        "triggerThreshold": 0,
+        "alertRuleTemplateName": null,
+        "enabled": false
+      }
+    }
+  ]
+}
