@@ -1,0 +1,64 @@
+{
+  "$schema": "https://schema.management.azure.com/schemas/2019-04-01/deploymentTemplate.json#",
+  "contentVersion": "1.0.0.0",
+  "parameters": {
+    "workspace": {
+      "type": "String"
+    }
+  },
+  "resources": [
+    {
+      "id": "[concat(resourceId('Microsoft.OperationalInsights/workspaces/providers', parameters('workspace'), 'Microsoft.SecurityInsights'),'/alertRules/02dd8d0b-c9c6-44cc-9fe9-536f573c14bb')]",
+      "name": "[concat(parameters('workspace'),'/Microsoft.SecurityInsights/02dd8d0b-c9c6-44cc-9fe9-536f573c14bb')]",
+      "type": "Microsoft.OperationalInsights/workspaces/providers/alertRules",
+      "kind": "Scheduled",
+      "apiVersion": "2023-02-01-preview",
+      "properties": {
+        "displayName": "Cognni Incidents for Highly Sensitive HR Information",
+        "description": "Display incidents in which highly sensitive HR information was placed at risk by user sharing.",
+        "alertDetailsOverride": null,
+        "customDetails": null,
+        "entityMappings": [
+          {
+            "entityType": "Account",
+            "fieldMappings": [
+              {
+                "columnName": "AccountCustomEntity",
+                "identifier": "FullName"
+              }
+            ]
+          }
+        ],
+        "eventGroupingSettings": null,
+        "incidentConfiguration": {
+          "createIncident": true,
+          "groupingConfiguration": {
+            "enabled": false,
+            "groupByAlertDetails": null,
+            "groupByCustomDetails": null,
+            "groupByEntities": [],
+            "lookbackDuration": "PT5M",
+            "matchingMethod": "AllEntities",
+            "reopenClosedIncident": false
+          }
+        },
+        "query": "let highRisk = 3;\nlet hr = 'HR Information';\nCognniIncidents_CL \n| where Severity == highRisk\n| where informationType_s == hr\n| where TimeGenerated >= ago(5h)\n| extend AccountCustomEntity = userId_s\n",
+        "queryPeriod": "PT5H",
+        "queryFrequency": "PT5H",
+        "sentinelEntitiesMappings": null,
+        "severity": "High",
+        "suppressionDuration": "PT1H",
+        "suppressionEnabled": false,
+        "tactics": [
+          "Collection"
+        ],
+        "techniques": null,
+        "templateVersion": null,
+        "triggerOperator": "GreaterThan",
+        "triggerThreshold": 0,
+        "alertRuleTemplateName": null,
+        "enabled": false
+      }
+    }
+  ]
+}
