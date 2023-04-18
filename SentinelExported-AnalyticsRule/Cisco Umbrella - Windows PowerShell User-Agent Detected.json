@@ -1,0 +1,55 @@
+{
+  "$schema": "https://schema.management.azure.com/schemas/2019-04-01/deploymentTemplate.json#",
+  "contentVersion": "1.0.0.0",
+  "parameters": {
+    "workspace": {
+      "type": "String"
+    }
+  },
+  "resources": [
+    {
+      "id": "[concat(resourceId('Microsoft.OperationalInsights/workspaces/providers', parameters('workspace'), 'Microsoft.SecurityInsights'),'/alertRules/bf00561f-ca88-49c4-97f9-ff0c6611e3a0')]",
+      "name": "[concat(parameters('workspace'),'/Microsoft.SecurityInsights/bf00561f-ca88-49c4-97f9-ff0c6611e3a0')]",
+      "type": "Microsoft.OperationalInsights/workspaces/providers/alertRules",
+      "kind": "Scheduled",
+      "apiVersion": "2023-02-01-preview",
+      "properties": {
+        "displayName": "Cisco Umbrella - Windows PowerShell User-Agent Detected",
+        "description": "Rule helps to detect Powershell user-agent activity by an unusual process other than a web browser.",
+        "alertDetailsOverride": null,
+        "customDetails": null,
+        "entityMappings": null,
+        "eventGroupingSettings": null,
+        "incidentConfiguration": {
+          "createIncident": true,
+          "groupingConfiguration": {
+            "enabled": false,
+            "groupByAlertDetails": null,
+            "groupByCustomDetails": null,
+            "groupByEntities": [],
+            "lookbackDuration": "PT5M",
+            "matchingMethod": "AllEntities",
+            "reopenClosedIncident": false
+          }
+        },
+        "query": "let timeframe = 15m;\nCisco_Umbrella\n| where EventType == \"proxylogs\"\n| where TimeGenerated > ago(timeframe)\n| where HttpUserAgentOriginal contains \"WindowsPowerShell\"\n| extend Message = \"Windows PowerShell User Agent\"\n| project Message, SrcIpAddr, DstIpAddr, UrlOriginal, TimeGenerated,HttpUserAgentOriginal\n| extend IpCustomEntity = SrcIpAddr, UrlCustomEntity = UrlOriginal\n",
+        "queryPeriod": "PT15M",
+        "queryFrequency": "PT15M",
+        "sentinelEntitiesMappings": null,
+        "severity": "Medium",
+        "suppressionDuration": "PT1H",
+        "suppressionEnabled": false,
+        "tactics": [
+          "CommandAndControl",
+          "DefenseEvasion"
+        ],
+        "techniques": null,
+        "templateVersion": null,
+        "triggerOperator": "GreaterThan",
+        "triggerThreshold": 0,
+        "alertRuleTemplateName": null,
+        "enabled": false
+      }
+    }
+  ]
+}
