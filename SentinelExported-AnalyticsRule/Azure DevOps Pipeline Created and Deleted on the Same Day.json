@@ -1,0 +1,73 @@
+{
+  "$schema": "https://schema.management.azure.com/schemas/2019-04-01/deploymentTemplate.json#",
+  "contentVersion": "1.0.0.0",
+  "parameters": {
+    "workspace": {
+      "type": "String"
+    }
+  },
+  "resources": [
+    {
+      "id": "[concat(resourceId('Microsoft.OperationalInsights/workspaces/providers', parameters('workspace'), 'Microsoft.SecurityInsights'),'/alertRules/7d35e34e-2107-4aaf-8f57-8d2c64ff3a10')]",
+      "name": "[concat(parameters('workspace'),'/Microsoft.SecurityInsights/7d35e34e-2107-4aaf-8f57-8d2c64ff3a10')]",
+      "type": "Microsoft.OperationalInsights/workspaces/providers/alertRules",
+      "kind": "Scheduled",
+      "apiVersion": "2023-02-01-preview",
+      "properties": {
+        "displayName": "Azure DevOps Pipeline Created and Deleted on the Same Day",
+        "description": "An attacker with access to Azure DevOps could create a pipeline to inject artifacts used by other pipelines, \nor to create a malicious software build that looks legitimate by using a pipeline that incorporates legitimate elements. \nAn attacker would also likely want to cover their tracks once conducting such activity. This query looks for Pipelines \ncreated and deleted within the same day, this is unlikely to be legitimate user activity in the majority of cases.",
+        "alertDetailsOverride": null,
+        "customDetails": null,
+        "entityMappings": [
+          {
+            "entityType": "Account",
+            "fieldMappings": [
+              {
+                "columnName": "AccountCustomEntity",
+                "identifier": "FullName"
+              }
+            ]
+          },
+          {
+            "entityType": "IP",
+            "fieldMappings": [
+              {
+                "columnName": "IPCustomEntity",
+                "identifier": "Address"
+              }
+            ]
+          }
+        ],
+        "eventGroupingSettings": null,
+        "incidentConfiguration": {
+          "createIncident": true,
+          "groupingConfiguration": {
+            "enabled": false,
+            "groupByAlertDetails": null,
+            "groupByCustomDetails": null,
+            "groupByEntities": [],
+            "lookbackDuration": "PT5M",
+            "matchingMethod": "AllEntities",
+            "reopenClosedIncident": false
+          }
+        },
+        "query": "let timeframe = 3d;\n// Get Release Pipeline Creation Events and group by day\nAzureDevOpsAuditing\n| where TimeGenerated > ago(timeframe)\n| where OperationName =~ \"Release.ReleasePipelineCreated\"\n// Group by day\n| extend timekey = bin(TimeGenerated, 1d)\n| extend PipelineId = tostring(Data.PipelineId)\n| extend PipelineName = tostring(Data.PipelineName)\n// Rename some columns to make output clearer\n| project-rename TimeCreated = TimeGenerated, CreatingUser = ActorUPN, CreatingUserAgent = UserAgent, CreatingIP = IpAddress\n// Join with Release Pipeline Deletions where Pipeline ID is the same and deletion occurred on same day as creation\n| join (AzureDevOpsAuditing\n| where TimeGenerated > ago(timeframe)\n| where OperationName =~ \"Release.ReleasePipelineDeleted\"\n// Group by day\n| extend timekey = bin(TimeGenerated, 1d)\n| extend PipelineId = tostring(Data.PipelineId)\n| extend PipelineName = tostring(Data.PipelineName)\n// Rename some things to make the output clearer\n| project-rename TimeDeleted = TimeGenerated, DeletingUser = ActorUPN, DeletingUserAgent = UserAgent, DeletingIP = IpAddress) on PipelineId, timekey\n| project TimeCreated, TimeDeleted, PipelineName, PipelineId, CreatingUser, CreatingIP, CreatingUserAgent, DeletingUser, DeletingIP, DeletingUserAgent, ScopeDisplayName, ProjectName, Data, OperationName, OperationName1\n| extend timestamp = TimeCreated, AccountCustomEntity = CreatingUser, IPCustomEntity = CreatingIP\n",
+        "queryPeriod": "P3D",
+        "queryFrequency": "P3D",
+        "sentinelEntitiesMappings": null,
+        "severity": "Medium",
+        "suppressionDuration": "PT1H",
+        "suppressionEnabled": false,
+        "tactics": [
+          "Execution"
+        ],
+        "techniques": null,
+        "templateVersion": null,
+        "triggerOperator": "GreaterThan",
+        "triggerThreshold": 0,
+        "alertRuleTemplateName": null,
+        "enabled": false
+      }
+    }
+  ]
+}
