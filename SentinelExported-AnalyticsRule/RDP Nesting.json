@@ -1,0 +1,82 @@
+{
+  "$schema": "https://schema.management.azure.com/schemas/2019-04-01/deploymentTemplate.json#",
+  "contentVersion": "1.0.0.0",
+  "parameters": {
+    "workspace": {
+      "type": "String"
+    }
+  },
+  "resources": [
+    {
+      "id": "[concat(resourceId('Microsoft.OperationalInsights/workspaces/providers', parameters('workspace'), 'Microsoft.SecurityInsights'),'/alertRules/41c5eee0-e90e-4278-8c3e-098f016701bf')]",
+      "name": "[concat(parameters('workspace'),'/Microsoft.SecurityInsights/41c5eee0-e90e-4278-8c3e-098f016701bf')]",
+      "type": "Microsoft.OperationalInsights/workspaces/providers/alertRules",
+      "kind": "Scheduled",
+      "apiVersion": "2023-02-01-preview",
+      "properties": {
+        "displayName": "RDP Nesting",
+        "description": "Identifies when an RDP connection is made to a first system and then an RDP connection is made from the first system \nto another system with the same account within the 60 minutes. Additionally, if historically daily  \nRDP connections are indicated by the logged EventID 4624 with LogonType = 10",
+        "alertDetailsOverride": null,
+        "customDetails": null,
+        "entityMappings": [
+          {
+            "entityType": "Account",
+            "fieldMappings": [
+              {
+                "columnName": "AccountCustomEntity",
+                "identifier": "FullName"
+              }
+            ]
+          },
+          {
+            "entityType": "Host",
+            "fieldMappings": [
+              {
+                "columnName": "HostCustomEntity",
+                "identifier": "FullName"
+              }
+            ]
+          },
+          {
+            "entityType": "IP",
+            "fieldMappings": [
+              {
+                "columnName": "IPCustomEntity",
+                "identifier": "Address"
+              }
+            ]
+          }
+        ],
+        "eventGroupingSettings": null,
+        "incidentConfiguration": {
+          "createIncident": true,
+          "groupingConfiguration": {
+            "enabled": false,
+            "groupByAlertDetails": null,
+            "groupByCustomDetails": null,
+            "groupByEntities": [],
+            "lookbackDuration": "PT5M",
+            "matchingMethod": "AllEntities",
+            "reopenClosedIncident": false
+          }
+        },
+        "query": "\nlet endtime = 1d;\nlet starttime = 8d;\n// The threshold below excludes matching on RDP connection computer counts of 5 or more by a given account and IP in a given day.  Change the threshold as needed.\nlet threshold = 5;\nSecurityEvent\n| where TimeGenerated >= ago(endtime) \n| where EventID == 4624 and LogonType == 10\n// Labeling the first RDP connection time, computer and ip\n| extend FirstHop = TimeGenerated, FirstComputer = toupper(Computer), FirstIPAddress = IpAddress, Account = tolower(Account)  \n| join kind=inner (\nSecurityEvent\n| where TimeGenerated >= ago(endtime) \n| where EventID == 4624 and LogonType == 10\n// Labeling the second RDP connection time, computer and ip\n| extend SecondHop = TimeGenerated, SecondComputer = toupper(Computer), SecondIPAddress = IpAddress, Account = tolower(Account)\n) on Account\n// Make sure that the first connection is after the second connection --> SecondHop > FirstHop\n// Then identify only RDP to another computer from within the first RDP connection by only choosing matches where the Computer names do not match --> FirstComputer != SecondComputer\n// Then make sure the IPAddresses do not match by excluding connections from the same computers with first hop RDP connections to multiple computers --> FirstIPAddress != SecondIPAddress\n| where FirstComputer != SecondComputer and FirstIPAddress != SecondIPAddress and SecondHop > FirstHop\n// where the second hop occurs within 30 minutes of the first hop\n| where SecondHop <= FirstHop+30m\n| distinct Account, FirstHop, FirstComputer, FirstIPAddress, SecondHop, SecondComputer, SecondIPAddress, AccountType, Activity, LogonTypeName, ProcessName\n// use left anti to exclude anything from the previous 7 days where the Account and IP has connected 5 or more computers.\n| join kind=leftanti (\nSecurityEvent\n| where TimeGenerated >= ago(starttime) and TimeGenerated < ago(endtime) \n| where EventID == 4624 and LogonType == 10\n| summarize makeset(Computer), ComputerCount = dcount(Computer) by bin(TimeGenerated, 1d), Account = tolower(Account), IpAddress\n// Connection count to computer by same account and IP to exclude counts of 5 or more on a given day\n| where ComputerCount >= threshold\n| mvexpand set_Computer\n| extend Computer = toupper(set_Computer)\n) on Account, $left.SecondComputer == $right.Computer, $left.SecondIPAddress == $right.IpAddress\n| summarize FirstHopFirstSeen = min(FirstHop), FirstHopLastSeen = max(FirstHop) by Account, FirstComputer, FirstIPAddress, SecondHop, SecondComputer, \nSecondIPAddress, AccountType, Activity, LogonTypeName, ProcessName\n| extend timestamp = FirstHopFirstSeen, AccountCustomEntity = Account, HostCustomEntity = FirstComputer, IPCustomEntity = FirstIPAddress\n",
+        "queryPeriod": "P8D",
+        "queryFrequency": "P1D",
+        "sentinelEntitiesMappings": null,
+        "severity": "Medium",
+        "suppressionDuration": "PT1H",
+        "suppressionEnabled": false,
+        "tactics": [
+          "LateralMovement"
+        ],
+        "techniques": null,
+        "templateVersion": null,
+        "triggerOperator": "GreaterThan",
+        "triggerThreshold": 0,
+        "alertRuleTemplateName": null,
+        "enabled": false
+      }
+    }
+  ]
+}
