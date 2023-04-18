@@ -1,0 +1,73 @@
+{
+  "$schema": "https://schema.management.azure.com/schemas/2019-04-01/deploymentTemplate.json#",
+  "contentVersion": "1.0.0.0",
+  "parameters": {
+    "workspace": {
+      "type": "String"
+    }
+  },
+  "resources": [
+    {
+      "id": "[concat(resourceId('Microsoft.OperationalInsights/workspaces/providers', parameters('workspace'), 'Microsoft.SecurityInsights'),'/alertRules/c54c6061-519f-4649-90f5-d1a76710cee0')]",
+      "name": "[concat(parameters('workspace'),'/Microsoft.SecurityInsights/c54c6061-519f-4649-90f5-d1a76710cee0')]",
+      "type": "Microsoft.OperationalInsights/workspaces/providers/alertRules",
+      "kind": "Scheduled",
+      "apiVersion": "2023-02-01-preview",
+      "properties": {
+        "displayName": "Suspicious number of resource creation or deployment activities",
+        "description": "Indicates when an anomalous number of VM creations or deployment activities occur in Azure via the AzureActivity log.\nThe anomaly detection identifies activities that have occurred both since the start of the day 1 day ago and the start of the day 7 days ago.\nThe start of the day is considered 12am UTC time.",
+        "alertDetailsOverride": null,
+        "customDetails": null,
+        "entityMappings": [
+          {
+            "entityType": "Account",
+            "fieldMappings": [
+              {
+                "columnName": "AccountCustomEntity",
+                "identifier": "FullName"
+              }
+            ]
+          },
+          {
+            "entityType": "IP",
+            "fieldMappings": [
+              {
+                "columnName": "IPCustomEntity",
+                "identifier": "Address"
+              }
+            ]
+          }
+        ],
+        "eventGroupingSettings": null,
+        "incidentConfiguration": {
+          "createIncident": true,
+          "groupingConfiguration": {
+            "enabled": false,
+            "groupByAlertDetails": null,
+            "groupByCustomDetails": null,
+            "groupByEntities": [],
+            "lookbackDuration": "PT5M",
+            "matchingMethod": "AllEntities",
+            "reopenClosedIncident": false
+          }
+        },
+        "query": "\nlet szOperationNames = dynamic([\"microsoft.compute/virtualMachines/write\", \"microsoft.resources/deployments/write\"]);\nlet starttime = 7d;\nlet endtime = 1d;\nAzureActivity\n| where TimeGenerated between (startofday(ago(starttime)) .. startofday(ago(endtime)))\n| where OperationNameValue  in~ (szOperationNames)\n| summarize StartTimeUtc = min(TimeGenerated), EndTimeUtc = max(TimeGenerated), ActivityTimeStamp = makelist(TimeGenerated), ActivityStatusValue = makelist(ActivityStatusValue), \nOperationIds = makelist(OperationId), CallerIpAddress = makelist(CallerIpAddress), CorrelationId = makelist(CorrelationId) \nby ResourceId, Caller, OperationNameValue, Resource, ResourceGroup\n| mvexpand CallerIpAddress\n| where isnotempty(CallerIpAddress)\n| make-series dResourceCount=dcount(ResourceId)  default=0 on StartTimeUtc in range(startofday(ago(7d)), now(), 1d) \nby Caller, tostring(ActivityTimeStamp), tostring(ActivityStatusValue), tostring(OperationIds), tostring(CallerIpAddress), tostring(CorrelationId), ResourceId, OperationNameValue , Resource, ResourceGroup\n| extend (RSquare,Slope,Variance,RVariance,Interception,LineFit)=series_fit_line(dResourceCount)\n| where Slope > 0.2\n| join kind=leftsemi (\n// Last day's activity is anomalous\nAzureActivity\n| where TimeGenerated >= startofday(ago(endtime))\n| where OperationNameValue in~ (szOperationNames)\n| summarize StartTimeUtc = min(TimeGenerated), EndTimeUtc = max(TimeGenerated), ActivityTimeStamp = makelist(TimeGenerated), ActivityStatusValue = makelist(ActivityStatusValue), \nOperationIds = makelist(OperationId), CallerIpAddress = makelist(CallerIpAddress), CorrelationId = makelist(CorrelationId) \nby ResourceId, Caller, OperationNameValue, Resource, ResourceGroup\n| mvexpand CallerIpAddress\n| where isnotempty(CallerIpAddress)\n| make-series dResourceCount=dcount(ResourceId)  default=0 on StartTimeUtc in range(startofday(ago(1d)), now(), 1d) \nby Caller, tostring(ActivityTimeStamp), tostring(ActivityStatusValue), tostring(OperationIds), tostring(CallerIpAddress), tostring(CorrelationId), ResourceId, OperationNameValue , Resource, ResourceGroup\n| extend (RSquare,Slope,Variance,RVariance,Interception,LineFit)=series_fit_line(dResourceCount)\n| where Slope > 0.2    \n) on Caller, CallerIpAddress        \n| mvexpand todynamic(ActivityTimeStamp), todynamic(ActivityStatusValue), todynamic(OperationIds), todynamic(CorrelationId)\n| extend timestamp = ActivityTimeStamp, AccountCustomEntity = Caller, IPCustomEntity = CallerIpAddress\n",
+        "queryPeriod": "P7D",
+        "queryFrequency": "P1D",
+        "sentinelEntitiesMappings": null,
+        "severity": "Medium",
+        "suppressionDuration": "PT1H",
+        "suppressionEnabled": false,
+        "tactics": [
+          "Impact"
+        ],
+        "techniques": null,
+        "templateVersion": null,
+        "triggerOperator": "GreaterThan",
+        "triggerThreshold": 0,
+        "alertRuleTemplateName": null,
+        "enabled": false
+      }
+    }
+  ]
+}
