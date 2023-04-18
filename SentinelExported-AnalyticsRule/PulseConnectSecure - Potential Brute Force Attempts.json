@@ -1,0 +1,73 @@
+{
+  "$schema": "https://schema.management.azure.com/schemas/2019-04-01/deploymentTemplate.json#",
+  "contentVersion": "1.0.0.0",
+  "parameters": {
+    "workspace": {
+      "type": "String"
+    }
+  },
+  "resources": [
+    {
+      "id": "[concat(resourceId('Microsoft.OperationalInsights/workspaces/providers', parameters('workspace'), 'Microsoft.SecurityInsights'),'/alertRules/21e579cc-ec41-4f34-9796-1f30d64d88af')]",
+      "name": "[concat(parameters('workspace'),'/Microsoft.SecurityInsights/21e579cc-ec41-4f34-9796-1f30d64d88af')]",
+      "type": "Microsoft.OperationalInsights/workspaces/providers/alertRules",
+      "kind": "Scheduled",
+      "apiVersion": "2023-02-01-preview",
+      "properties": {
+        "displayName": "PulseConnectSecure - Potential Brute Force Attempts",
+        "description": "This query identifies evidence of potential brute force attack by looking at multiple failed attempts to log into the VPN server",
+        "alertDetailsOverride": null,
+        "customDetails": null,
+        "entityMappings": [
+          {
+            "entityType": "Account",
+            "fieldMappings": [
+              {
+                "columnName": "AccountCustomEntity",
+                "identifier": "FullName"
+              }
+            ]
+          },
+          {
+            "entityType": "IP",
+            "fieldMappings": [
+              {
+                "columnName": "IPCustomEntity",
+                "identifier": "Address"
+              }
+            ]
+          }
+        ],
+        "eventGroupingSettings": null,
+        "incidentConfiguration": {
+          "createIncident": true,
+          "groupingConfiguration": {
+            "enabled": false,
+            "groupByAlertDetails": null,
+            "groupByCustomDetails": null,
+            "groupByEntities": [],
+            "lookbackDuration": "PT5M",
+            "matchingMethod": "AllEntities",
+            "reopenClosedIncident": false
+          }
+        },
+        "query": "\nlet threshold = 20;\nPulseConnectSecure\n| where Messages contains \"Login failed\"\n| summarize StartTime = min(TimeGenerated), EndTime = max(TimeGenerated), count() by User, Source_IP\n| where count_ > threshold\n| extend timestamp = StartTime, AccountCustomEntity = User, IPCustomEntity = Source_IP\n",
+        "queryPeriod": "PT1H",
+        "queryFrequency": "PT1H",
+        "sentinelEntitiesMappings": null,
+        "severity": "Low",
+        "suppressionDuration": "PT1H",
+        "suppressionEnabled": false,
+        "tactics": [
+          "CredentialAccess"
+        ],
+        "techniques": null,
+        "templateVersion": null,
+        "triggerOperator": "GreaterThan",
+        "triggerThreshold": 0,
+        "alertRuleTemplateName": null,
+        "enabled": false
+      }
+    }
+  ]
+}
