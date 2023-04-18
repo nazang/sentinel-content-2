@@ -1,0 +1,60 @@
+{
+  "$schema": "https://schema.management.azure.com/schemas/2019-04-01/deploymentTemplate.json#",
+  "contentVersion": "1.0.0.0",
+  "parameters": {
+    "workspace": {
+      "type": "String"
+    }
+  },
+  "resources": [
+    {
+      "id": "[concat(resourceId('Microsoft.OperationalInsights/workspaces/providers', parameters('workspace'), 'Microsoft.SecurityInsights'),'/alertRules/8ac67fdf-b79d-43fe-ab46-5b2b38a7f1d1')]",
+      "name": "[concat(parameters('workspace'),'/Microsoft.SecurityInsights/8ac67fdf-b79d-43fe-ab46-5b2b38a7f1d1')]",
+      "type": "Microsoft.OperationalInsights/workspaces/providers/alertRules",
+      "kind": "Scheduled",
+      "apiVersion": "2023-02-01-preview",
+      "properties": {
+        "displayName": "Vectra AI Detect - Account in the Low Quadrant",
+        "description": "Identifies multiple Detections coming from the same account which caused a move into the Detect Low quadrant. \nTo meet this requirement, the threat score must be in 0-50 range and the certainty score between in 0-50 range (range is 1-100 for threat and certainty). If required, variables in the query can be adjusted to a different threshold. ",
+        "alertDetailsOverride": null,
+        "customDetails": null,
+        "entityMappings": null,
+        "eventGroupingSettings": null,
+        "incidentConfiguration": {
+          "createIncident": true,
+          "groupingConfiguration": {
+            "enabled": false,
+            "groupByAlertDetails": null,
+            "groupByCustomDetails": null,
+            "groupByEntities": [],
+            "lookbackDuration": "PT5M",
+            "matchingMethod": "AllEntities",
+            "reopenClosedIncident": false
+          }
+        },
+        "query": "let threat_score_max = 50;\nlet certainty_score_max = 50;\nlet upn_has_prefix = \":\";\nCommonSecurityLog\n| where DeviceVendor == \"Vectra Networks\"\n| where DeviceProduct == \"X Series\"\n| where DeviceEventClassID == \"asc\"\n| extend saccount = extract(\"saccount=(.+?);\", 1, AdditionalExtensions)\n| extend type = iff(saccount matches regex upn_has_prefix, tostring(split(saccount,\":\")[0]) ,\"network\" ) \n| extend upn = iff(saccount matches regex upn_has_prefix, tostring(split(saccount,\":\")[1]) , saccount )\n| project-rename threat_score = FlexNumber1\n| project-rename certainty_score = FlexNumber2\n| project-rename vectra_URL = DeviceCustomString4\n| project-rename detection_name = DeviceEventClassID\n| project-rename score_decreases = DeviceCustomString3\n| where threat_score < threat_score_max and certainty_score < certainty_score_max\n//keep only the event with the highest threat score per Host\n| summarize arg_max(threat_score, *) by saccount\n| project saccount, upn, type, threat_score, certainty_score, vectra_URL\n",
+        "queryPeriod": "PT1H",
+        "queryFrequency": "PT1H",
+        "sentinelEntitiesMappings": null,
+        "severity": "Low",
+        "suppressionDuration": "PT1H",
+        "suppressionEnabled": false,
+        "tactics": [
+          "CredentialAccess",
+          "Discovery",
+          "LateralMovement",
+          "Collection",
+          "CommandAndControl",
+          "Exfiltration",
+          "Impact"
+        ],
+        "techniques": null,
+        "templateVersion": null,
+        "triggerOperator": "GreaterThan",
+        "triggerThreshold": 0,
+        "alertRuleTemplateName": null,
+        "enabled": false
+      }
+    }
+  ]
+}

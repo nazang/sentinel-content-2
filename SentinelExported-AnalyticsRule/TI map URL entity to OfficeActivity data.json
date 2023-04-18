@@ -1,0 +1,73 @@
+{
+  "$schema": "https://schema.management.azure.com/schemas/2019-04-01/deploymentTemplate.json#",
+  "contentVersion": "1.0.0.0",
+  "parameters": {
+    "workspace": {
+      "type": "String"
+    }
+  },
+  "resources": [
+    {
+      "id": "[concat(resourceId('Microsoft.OperationalInsights/workspaces/providers', parameters('workspace'), 'Microsoft.SecurityInsights'),'/alertRules/c6a5eec5-e23e-463e-998e-24d1c0ffac15')]",
+      "name": "[concat(parameters('workspace'),'/Microsoft.SecurityInsights/c6a5eec5-e23e-463e-998e-24d1c0ffac15')]",
+      "type": "Microsoft.OperationalInsights/workspaces/providers/alertRules",
+      "kind": "Scheduled",
+      "apiVersion": "2023-02-01-preview",
+      "properties": {
+        "displayName": "TI map URL entity to OfficeActivity data",
+        "description": "Identifies a match in OfficeActivity data from any URL IOC from TI",
+        "alertDetailsOverride": null,
+        "customDetails": null,
+        "entityMappings": [
+          {
+            "entityType": "Account",
+            "fieldMappings": [
+              {
+                "columnName": "AccountCustomEntity",
+                "identifier": "FullName"
+              }
+            ]
+          },
+          {
+            "entityType": "URL",
+            "fieldMappings": [
+              {
+                "columnName": "URLCustomEntity",
+                "identifier": "Url"
+              }
+            ]
+          }
+        ],
+        "eventGroupingSettings": null,
+        "incidentConfiguration": {
+          "createIncident": true,
+          "groupingConfiguration": {
+            "enabled": false,
+            "groupByAlertDetails": null,
+            "groupByCustomDetails": null,
+            "groupByEntities": [],
+            "lookbackDuration": "PT5M",
+            "matchingMethod": "AllEntities",
+            "reopenClosedIncident": false
+          }
+        },
+        "query": "\nlet dt_lookBack = 1h;\nlet ioc_lookBack = 14d;\nThreatIntelligenceIndicator\n| where TimeGenerated >= ago(ioc_lookBack) and ExpirationDateTime > now()\n| where Active == true\n// Picking up only IOC's that contain the entities we want\n| where isnotempty(Url)\n| join (\n OfficeActivity\n  | where TimeGenerated >= ago(dt_lookBack)\n  //Extract the Url from a number of potential fields\n  | extend Url = iif(OfficeWorkload == \"AzureActiveDirectory\",extract(\"(http[s]?://(?:[a-zA-Z]|[0-9]|[$-_@.&+]|[!*\\\\(\\\\),]|(?:%[0-9a-fA-F][0-9a-fA-F]))+);\", 1,ModifiedProperties),tostring(parse_json(ModifiedProperties)[12].NewValue))\n  | where isnotempty(Url)\n  // Ensure we get a clean URL\n  | extend Url = tostring(split(Url, ';')[0])\n  | extend OfficeActivity_TimeGenerated = TimeGenerated\n  // Project a single user identity that we can use for entity mapping\n  | extend User = iif(isnotempty(UserId), UserId, iif(isnotempty(Actor), tostring(parse_json(Actor)[0].ID), tostring(parse_json(Parameters)[0].Vlaue))) \n) on Url\n| where OfficeActivity_TimeGenerated >= TimeGenerated and OfficeActivity_TimeGenerated < ExpirationDateTime\n| summarize LatestIndicatorTime = arg_max(TimeGenerated, *) by IndicatorId\n| project LatestIndicatorTime, Description, ActivityGroupNames, IndicatorId, ThreatType, ExpirationDateTime, ConfidenceScore, Operation, \nUserType, OfficeWorkload, Parameters, OfficeActivity_TimeGenerated, Url, User\n| extend timestamp = OfficeActivity_TimeGenerated, AccountCustomEntity = User, URLCustomEntity = Url\n",
+        "queryPeriod": "P14D",
+        "queryFrequency": "PT1H",
+        "sentinelEntitiesMappings": null,
+        "severity": "Medium",
+        "suppressionDuration": "PT1H",
+        "suppressionEnabled": false,
+        "tactics": [
+          "Impact"
+        ],
+        "techniques": null,
+        "templateVersion": null,
+        "triggerOperator": "GreaterThan",
+        "triggerThreshold": 0,
+        "alertRuleTemplateName": null,
+        "enabled": false
+      }
+    }
+  ]
+}

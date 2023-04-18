@@ -1,0 +1,64 @@
+{
+  "$schema": "https://schema.management.azure.com/schemas/2019-04-01/deploymentTemplate.json#",
+  "contentVersion": "1.0.0.0",
+  "parameters": {
+    "workspace": {
+      "type": "String"
+    }
+  },
+  "resources": [
+    {
+      "id": "[concat(resourceId('Microsoft.OperationalInsights/workspaces/providers', parameters('workspace'), 'Microsoft.SecurityInsights'),'/alertRules/9a8517b9-c1b6-4431-8e23-c01f5dd2dd00')]",
+      "name": "[concat(parameters('workspace'),'/Microsoft.SecurityInsights/9a8517b9-c1b6-4431-8e23-c01f5dd2dd00')]",
+      "type": "Microsoft.OperationalInsights/workspaces/providers/alertRules",
+      "kind": "Scheduled",
+      "apiVersion": "2023-02-01-preview",
+      "properties": {
+        "displayName": "ProofpointPOD - High risk message not discarded",
+        "description": "Detects when email with high risk score was not rejected or discarded by filters.",
+        "alertDetailsOverride": null,
+        "customDetails": null,
+        "entityMappings": [
+          {
+            "entityType": "Account",
+            "fieldMappings": [
+              {
+                "columnName": "AccountCustomEntity",
+                "identifier": "FullName"
+              }
+            ]
+          }
+        ],
+        "eventGroupingSettings": null,
+        "incidentConfiguration": {
+          "createIncident": true,
+          "groupingConfiguration": {
+            "enabled": false,
+            "groupByAlertDetails": null,
+            "groupByCustomDetails": null,
+            "groupByEntities": [],
+            "lookbackDuration": "PT5M",
+            "matchingMethod": "AllEntities",
+            "reopenClosedIncident": false
+          }
+        },
+        "query": "let lbtime = 10m;\nProofpointPOD\n| where TimeGenerated > ago(lbtime)\n| where EventType == 'message'\n| where NetworkDirection == 'inbound'\n| where FilterDisposition !in ('reject', 'discard')\n| where FilterModulesSpamScoresOverall == '100'\n| project SrcUserUpn, DstUserUpn\n| extend AccountCustomEntity = SrcUserUpn\n",
+        "queryPeriod": "PT10M",
+        "queryFrequency": "PT10M",
+        "sentinelEntitiesMappings": null,
+        "severity": "Low",
+        "suppressionDuration": "PT1H",
+        "suppressionEnabled": false,
+        "tactics": [
+          "InitialAccess"
+        ],
+        "techniques": null,
+        "templateVersion": null,
+        "triggerOperator": "GreaterThan",
+        "triggerThreshold": 0,
+        "alertRuleTemplateName": null,
+        "enabled": false
+      }
+    }
+  ]
+}

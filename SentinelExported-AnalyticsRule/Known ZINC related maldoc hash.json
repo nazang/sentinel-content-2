@@ -1,0 +1,83 @@
+{
+  "$schema": "https://schema.management.azure.com/schemas/2019-04-01/deploymentTemplate.json#",
+  "contentVersion": "1.0.0.0",
+  "parameters": {
+    "workspace": {
+      "type": "String"
+    }
+  },
+  "resources": [
+    {
+      "id": "[concat(resourceId('Microsoft.OperationalInsights/workspaces/providers', parameters('workspace'), 'Microsoft.SecurityInsights'),'/alertRules/c48257b9-ba87-4408-bf0a-2c6d31c0fc8b')]",
+      "name": "[concat(parameters('workspace'),'/Microsoft.SecurityInsights/c48257b9-ba87-4408-bf0a-2c6d31c0fc8b')]",
+      "type": "Microsoft.OperationalInsights/workspaces/providers/alertRules",
+      "kind": "Scheduled",
+      "apiVersion": "2023-02-01-preview",
+      "properties": {
+        "displayName": "Known ZINC related maldoc hash",
+        "description": "Document hash used by ZINC in highly targeted spear phishing campaign.",
+        "alertDetailsOverride": null,
+        "customDetails": null,
+        "entityMappings": [
+          {
+            "entityType": "Account",
+            "fieldMappings": [
+              {
+                "columnName": "AccountCustomEntity",
+                "identifier": "FullName"
+              }
+            ]
+          },
+          {
+            "entityType": "Host",
+            "fieldMappings": [
+              {
+                "columnName": "HostCustomEntity",
+                "identifier": "FullName"
+              }
+            ]
+          },
+          {
+            "entityType": "IP",
+            "fieldMappings": [
+              {
+                "columnName": "IPCustomEntity",
+                "identifier": "Address"
+              }
+            ]
+          }
+        ],
+        "eventGroupingSettings": null,
+        "incidentConfiguration": {
+          "createIncident": true,
+          "groupingConfiguration": {
+            "enabled": false,
+            "groupByAlertDetails": null,
+            "groupByCustomDetails": null,
+            "groupByEntities": [],
+            "lookbackDuration": "PT5M",
+            "matchingMethod": "AllEntities",
+            "reopenClosedIncident": false
+          }
+        },
+        "query": "let SHA256Hash = \"1174fd03271f80f5e2a6435c72bdd0272a6e3a37049f6190abf125b216a83471\" ;\n(union isfuzzy=true\n(CommonSecurityLog \n| parse Message with * '(' DNSName ')' * \n| where isnotempty(FileHash)\n| where FileHash in (SHA256Hash) \n| extend Account = SourceUserID, Computer = DeviceName, IPAddress = SourceIP\n),\n(Event\n//This query uses sysmon data depending on table name used this may need updataing\n| where Source == \"Microsoft-Windows-Sysmon\"\n| extend EvData = parse_xml(EventData)\n| extend EventDetail = EvData.DataItem.EventData.Data\n| extend Hashes = EventDetail.[16].[\"#text\"]\n| parse Hashes with * 'SHA256=' SHA265 ',' * \n| where isnotempty(Hashes)\n| where Hashes in (SHA256Hash) \n| extend Account = UserName\n)\n)\n| extend timestamp = TimeGenerated, AccountCustomEntity = Account, HostCustomEntity = Computer, IPCustomEntity = IPAddress\n",
+        "queryPeriod": "P1D",
+        "queryFrequency": "P1D",
+        "sentinelEntitiesMappings": null,
+        "severity": "High",
+        "suppressionDuration": "PT1H",
+        "suppressionEnabled": false,
+        "tactics": [
+          "CommandAndControl",
+          "CredentialAccess"
+        ],
+        "techniques": null,
+        "templateVersion": null,
+        "triggerOperator": "GreaterThan",
+        "triggerThreshold": 0,
+        "alertRuleTemplateName": null,
+        "enabled": false
+      }
+    }
+  ]
+}

@@ -1,0 +1,91 @@
+{
+  "$schema": "https://schema.management.azure.com/schemas/2019-04-01/deploymentTemplate.json#",
+  "contentVersion": "1.0.0.0",
+  "parameters": {
+    "workspace": {
+      "type": "String"
+    }
+  },
+  "resources": [
+    {
+      "id": "[concat(resourceId('Microsoft.OperationalInsights/workspaces/providers', parameters('workspace'), 'Microsoft.SecurityInsights'),'/alertRules/4cd59d47-1635-4661-88b7-a24d64c36a86')]",
+      "name": "[concat(parameters('workspace'),'/Microsoft.SecurityInsights/4cd59d47-1635-4661-88b7-a24d64c36a86')]",
+      "type": "Microsoft.OperationalInsights/workspaces/providers/alertRules",
+      "kind": "Scheduled",
+      "apiVersion": "2023-02-01-preview",
+      "properties": {
+        "displayName": "TI map Email entity to SecurityEvent",
+        "description": "Identifies a match in SecurityEvent table from any Email IOC from TI",
+        "alertDetailsOverride": null,
+        "customDetails": null,
+        "entityMappings": [
+          {
+            "entityType": "Account",
+            "fieldMappings": [
+              {
+                "columnName": "AccountCustomEntity",
+                "identifier": "FullName"
+              }
+            ]
+          },
+          {
+            "entityType": "Host",
+            "fieldMappings": [
+              {
+                "columnName": "HostCustomEntity",
+                "identifier": "FullName"
+              }
+            ]
+          },
+          {
+            "entityType": "IP",
+            "fieldMappings": [
+              {
+                "columnName": "IPCustomEntity",
+                "identifier": "Address"
+              }
+            ]
+          },
+          {
+            "entityType": "URL",
+            "fieldMappings": [
+              {
+                "columnName": "URLCustomEntity",
+                "identifier": "Url"
+              }
+            ]
+          }
+        ],
+        "eventGroupingSettings": null,
+        "incidentConfiguration": {
+          "createIncident": true,
+          "groupingConfiguration": {
+            "enabled": false,
+            "groupByAlertDetails": null,
+            "groupByCustomDetails": null,
+            "groupByEntities": [],
+            "lookbackDuration": "PT5M",
+            "matchingMethod": "AllEntities",
+            "reopenClosedIncident": false
+          }
+        },
+        "query": "\nlet dt_lookBack = 1h;\nlet ioc_lookBack = 14d;\nlet emailregex = @'^[a-zA-Z0-9_.+-]+@[a-zA-Z0-9-]+\\.[a-zA-Z0-9-.]+$';\nThreatIntelligenceIndicator\n| where TimeGenerated >= ago(ioc_lookBack) and ExpirationDateTime > now()\n| where Active == true\n//Filtering the table for Email related IOCs\n| where isnotempty(EmailSenderAddress)\n| join (\n    SecurityEvent | where TimeGenerated >= ago(dt_lookBack) and isnotempty(TargetUserName)\n    //Normalizing the column to lower case for exact match with EmailSenderAddress column\n    | extend TargetUserName = tolower(TargetUserName)\n    // renaming timestamp column so it is clear the log this came from SecurityEvent table\n    | extend SecurityEvent_TimeGenerated = TimeGenerated\n)\non $left.EmailSenderAddress == $right.TargetUserName\n| where SecurityEvent_TimeGenerated >= TimeGenerated and SecurityEvent_TimeGenerated < ExpirationDateTime\n| summarize LatestIndicatorTime = arg_max(TimeGenerated, *) by IndicatorId\n| project LatestIndicatorTime, Description, ActivityGroupNames, IndicatorId, ThreatType, Url, ExpirationDateTime, ConfidenceScore, SecurityEvent_TimeGenerated,\nEmailSenderName, EmailRecipient, EmailSourceDomain, EmailSourceIpAddress, EmailSubject, FileHashValue, FileHashType, Computer, EventID, TargetUserName, Activity, IpAddress, AccountType,\nLogonTypeName, LogonProcessName, Status, SubStatus\n| extend timestamp = SecurityEvent_TimeGenerated, AccountCustomEntity = TargetUserName, IPCustomEntity = IpAddress, HostCustomEntity = Computer, URLCustomEntity = Url\n",
+        "queryPeriod": "P14D",
+        "queryFrequency": "PT1H",
+        "sentinelEntitiesMappings": null,
+        "severity": "Medium",
+        "suppressionDuration": "PT1H",
+        "suppressionEnabled": false,
+        "tactics": [
+          "Impact"
+        ],
+        "techniques": null,
+        "templateVersion": null,
+        "triggerOperator": "GreaterThan",
+        "triggerThreshold": 0,
+        "alertRuleTemplateName": null,
+        "enabled": false
+      }
+    }
+  ]
+}

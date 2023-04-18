@@ -1,0 +1,74 @@
+{
+  "$schema": "https://schema.management.azure.com/schemas/2019-04-01/deploymentTemplate.json#",
+  "contentVersion": "1.0.0.0",
+  "parameters": {
+    "workspace": {
+      "type": "String"
+    }
+  },
+  "resources": [
+    {
+      "id": "[concat(resourceId('Microsoft.OperationalInsights/workspaces/providers', parameters('workspace'), 'Microsoft.SecurityInsights'),'/alertRules/f8b12aa5-fb43-4b09-86f8-ac3e825c2260')]",
+      "name": "[concat(parameters('workspace'),'/Microsoft.SecurityInsights/f8b12aa5-fb43-4b09-86f8-ac3e825c2260')]",
+      "type": "Microsoft.OperationalInsights/workspaces/providers/alertRules",
+      "kind": "Scheduled",
+      "apiVersion": "2023-02-01-preview",
+      "properties": {
+        "displayName": "Multiple users email forwarded to same destination",
+        "description": "Identifies when multiple (more than one) users mailboxes are configured to forward to the same destination. \nThis could be an attacker-controlled destination mailbox configured to collect mail from multiple compromised user accounts.",
+        "alertDetailsOverride": null,
+        "customDetails": null,
+        "entityMappings": [
+          {
+            "entityType": "Account",
+            "fieldMappings": [
+              {
+                "columnName": "AccountCustomEntity",
+                "identifier": "FullName"
+              }
+            ]
+          },
+          {
+            "entityType": "IP",
+            "fieldMappings": [
+              {
+                "columnName": "IPCustomEntity",
+                "identifier": "Address"
+              }
+            ]
+          }
+        ],
+        "eventGroupingSettings": null,
+        "incidentConfiguration": {
+          "createIncident": true,
+          "groupingConfiguration": {
+            "enabled": false,
+            "groupByAlertDetails": null,
+            "groupByCustomDetails": null,
+            "groupByEntities": [],
+            "lookbackDuration": "PT5M",
+            "matchingMethod": "AllEntities",
+            "reopenClosedIncident": false
+          }
+        },
+        "query": "\nOfficeActivity\n| where Operation =~ \"Set-Mailbox\"\n| where Parameters has \"ForwardingSmtpAddress\"\n| extend parsed = parse_json(Parameters)\n| mv-expand parsed\n| where parsed.Name == \"ForwardingSmtpAddress\"\n| extend parameterName = tostring(parsed.Name), fwdingDestination = tostring(parsed.Value)\n| where isnotempty(fwdingDestination)\n| extend ClientIPOnly = case( \nClientIP has \".\" and ClientIP has ':', tostring(split(ClientIP,\":\")[0]), \nClientIP has \".\" and ClientIP has '-', tostring(split(ClientIP,\"-\")[0]), \nClientIP has ']-', tostring(trim_start(@'[[]',tostring(split(ClientIP,\"]\")[0]))),\nClientIP has ']:', tostring(trim_start(@'[[]',tostring(split(ClientIP,\"]\")[0]))),\nisempty(ClientIP) and ClientIP_ has \".\" and ClientIP_ has ':', tostring(split(ClientIP_,\":\")[0]), \nisempty(ClientIP) and ClientIP_ has \".\" and ClientIP_ has '-', tostring(split(ClientIP_,\"-\")[0]), \nisempty(ClientIP) and ClientIP_ has ']-', tostring(trim_start(@'[[]',tostring(split(ClientIP_,\"]\")[0]))),\nisempty(ClientIP) and ClientIP_ has ']:', tostring(trim_start(@'[[]',tostring(split(ClientIP_,\"]\")[0]))),\nisnotempty(ClientIP), ClientIP,\nisnotempty(ClientIP_), ClientIP_,\n\"IP Not Available\"\n)  \n| extend Port = case(\nClientIP has \".\" and ClientIP has ':', tostring(split(ClientIP,\":\")[1]), \nClientIP has \".\" and ClientIP has '-', tostring(split(ClientIP,\"-\")[1]), \nClientIP has ']-', tostring(split(ClientIP,\"]-\")[1]), \nClientIP has ']:', tostring(split(ClientIP,\"]:\")[1]), \nisempty(ClientIP) and ClientIP_ has \".\" and ClientIP_ has ':', tostring(split(ClientIP_,\":\")[1]), \nisempty(ClientIP) and ClientIP_ has \".\" and ClientIP_ has '-', tostring(split(ClientIP_,\"-\")[1]), \nisempty(ClientIP) and ClientIP_ has ']-', tostring(split(ClientIP_,\"]-\")[1]),\nisempty(ClientIP) and ClientIP_ has ']:', tostring(split(ClientIP_,\"]:\")[1]),\nisnotempty(ClientIP), ClientIP,\nisnotempty(ClientIP_), ClientIP_,\n\"IP Not Available\"\n)\n| extend UserId = iff(isempty(UserId), UserId_, UserId)\n| summarize StartTimeUtc = min(TimeGenerated), EndTimeUtc = max(TimeGenerated), DistinctUserCount = dcount(UserId), UserId = make_set(UserId), \nPorts = make_set(Port), EventCount = count() by fwdingDestination, ClientIP = ClientIPOnly \n| where DistinctUserCount > 1\n| mv-expand UserId\n| extend UserId = tostring(UserId), Ports = tostring(Ports)\n| distinct StartTimeUtc, EndTimeUtc, UserId, DistinctUserCount, ClientIP, Ports, fwdingDestination, EventCount\n| extend timestamp = StartTimeUtc, AccountCustomEntity = UserId, IPCustomEntity = ClientIP\n",
+        "queryPeriod": "P7D",
+        "queryFrequency": "P1D",
+        "sentinelEntitiesMappings": null,
+        "severity": "Medium",
+        "suppressionDuration": "PT1H",
+        "suppressionEnabled": false,
+        "tactics": [
+          "Collection",
+          "Exfiltration"
+        ],
+        "techniques": null,
+        "templateVersion": null,
+        "triggerOperator": "GreaterThan",
+        "triggerThreshold": 0,
+        "alertRuleTemplateName": null,
+        "enabled": false
+      }
+    }
+  ]
+}

@@ -1,0 +1,82 @@
+{
+  "$schema": "https://schema.management.azure.com/schemas/2019-04-01/deploymentTemplate.json#",
+  "contentVersion": "1.0.0.0",
+  "parameters": {
+    "workspace": {
+      "type": "String"
+    }
+  },
+  "resources": [
+    {
+      "id": "[concat(resourceId('Microsoft.OperationalInsights/workspaces/providers', parameters('workspace'), 'Microsoft.SecurityInsights'),'/alertRules/2a03054e-7048-4886-9550-23d04c013c49')]",
+      "name": "[concat(parameters('workspace'),'/Microsoft.SecurityInsights/2a03054e-7048-4886-9550-23d04c013c49')]",
+      "type": "Microsoft.OperationalInsights/workspaces/providers/alertRules",
+      "kind": "Scheduled",
+      "apiVersion": "2023-02-01-preview",
+      "properties": {
+        "displayName": "(Preview) TI map Domain entity to Dns Events (Normalized DNS)",
+        "description": "Identifies a match in DNS events from any Domain IOC from TI\nTo use this analytics rule, make sure you have deployed the [ASIM normalization parsers](https://aka.ms/AzSentinelDns).",
+        "alertDetailsOverride": null,
+        "customDetails": null,
+        "entityMappings": [
+          {
+            "entityType": "Host",
+            "fieldMappings": [
+              {
+                "columnName": "HostCustomEntity",
+                "identifier": "FullName"
+              }
+            ]
+          },
+          {
+            "entityType": "IP",
+            "fieldMappings": [
+              {
+                "columnName": "IPCustomEntity",
+                "identifier": "Address"
+              }
+            ]
+          },
+          {
+            "entityType": "URL",
+            "fieldMappings": [
+              {
+                "columnName": "URLCustomEntity",
+                "identifier": "Url"
+              }
+            ]
+          }
+        ],
+        "eventGroupingSettings": null,
+        "incidentConfiguration": {
+          "createIncident": true,
+          "groupingConfiguration": {
+            "enabled": false,
+            "groupByAlertDetails": null,
+            "groupByCustomDetails": null,
+            "groupByEntities": [],
+            "lookbackDuration": "PT5M",
+            "matchingMethod": "AllEntities",
+            "reopenClosedIncident": false
+          }
+        },
+        "query": "let dt_lookBack = 1h;\nlet ioc_lookBack = 14d;\nlet DomainTIs= ThreatIntelligenceIndicator\n  | where TimeGenerated >= ago(ioc_lookBack) and ExpirationDateTime > now()\n  // Picking up only IOC's that contain the entities we want\n  | where isnotempty(DomainName)\n  | where Active == true\n  | summarize LatestIndicatorTime = arg_max(TimeGenerated, *) by IndicatorId;\nlet Domains= toscalar(DomainTIs | where isnotempty(DomainName) |summarize make_set(DomainName));\nDomainTIs\n  | join (\n      imDns(starttime=ago(dt_lookBack), domain_has_any=(Domains))\n      | extend DNS_TimeGenerated = TimeGenerated\n) on $left.DomainName==$right.DnsQuery\n| where DNS_TimeGenerated < ExpirationDateTime\n| project LatestIndicatorTime, Description, ActivityGroupNames, IndicatorId, ThreatType, ExpirationDateTime, ConfidenceScore, Url, DNS_TimeGenerated, Dvc, SrcIpAddr, DnsQuery, QueryType\n| extend timestamp = DNS_TimeGenerated, HostCustomEntity = Dvc, IPCustomEntity = SrcIpAddr, URLCustomEntity = Url\n",
+        "queryPeriod": "P14D",
+        "queryFrequency": "PT1H",
+        "sentinelEntitiesMappings": null,
+        "severity": "Medium",
+        "suppressionDuration": "PT1H",
+        "suppressionEnabled": false,
+        "tactics": [
+          "Impact"
+        ],
+        "techniques": null,
+        "templateVersion": null,
+        "triggerOperator": "GreaterThan",
+        "triggerThreshold": 0,
+        "alertRuleTemplateName": null,
+        "enabled": false
+      }
+    }
+  ]
+}

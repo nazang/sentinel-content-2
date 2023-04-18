@@ -1,0 +1,64 @@
+{
+  "$schema": "https://schema.management.azure.com/schemas/2019-04-01/deploymentTemplate.json#",
+  "contentVersion": "1.0.0.0",
+  "parameters": {
+    "workspace": {
+      "type": "String"
+    }
+  },
+  "resources": [
+    {
+      "id": "[concat(resourceId('Microsoft.OperationalInsights/workspaces/providers', parameters('workspace'), 'Microsoft.SecurityInsights'),'/alertRules/e98fd4f3-6694-4925-8faa-f8f712399fcb')]",
+      "name": "[concat(parameters('workspace'),'/Microsoft.SecurityInsights/e98fd4f3-6694-4925-8faa-f8f712399fcb')]",
+      "type": "Microsoft.OperationalInsights/workspaces/providers/alertRules",
+      "kind": "Scheduled",
+      "apiVersion": "2023-02-01-preview",
+      "properties": {
+        "displayName": "Email access via active sync",
+        "description": "This query detects attempts to add attacker devices as allowed IDs for active sync using the Set-CASMailbox command.\nThis technique was seen in relation to Solorigate attack but the results can indicate potential malicious activity used in different attacks.\n- Note that this query can be changed to use the KQL \"has_all\" operator, which hasn't yet been documented officially, but will be soon.\n  In short, \"has_all\" will only match when the referenced field has all strings in the list.\n- Refer to Set-CASMailbox syntax: https://docs.microsoft.com/powershell/module/exchange/set-casmailbox?view=exchange-ps",
+        "alertDetailsOverride": null,
+        "customDetails": null,
+        "entityMappings": [
+          {
+            "entityType": "Host",
+            "fieldMappings": [
+              {
+                "columnName": "HostCustomEntity",
+                "identifier": "FullName"
+              }
+            ]
+          }
+        ],
+        "eventGroupingSettings": null,
+        "incidentConfiguration": {
+          "createIncident": true,
+          "groupingConfiguration": {
+            "enabled": false,
+            "groupByAlertDetails": null,
+            "groupByCustomDetails": null,
+            "groupByEntities": [],
+            "lookbackDuration": "PT5M",
+            "matchingMethod": "AllEntities",
+            "reopenClosedIncident": false
+          }
+        },
+        "query": "let timeframe = 1d;\nlet cmdList = dynamic([\"Set-CASMailbox\",\"ActiveSyncAllowedDeviceIDs\",\"add\"]);\n(union isfuzzy=true\n(\nSecurityEvent\n| where TimeGenerated >= ago(timeframe)\n| where CommandLine has_all (cmdList)\n| project Type, TimeGenerated, Computer, Account, SubjectDomainName, SubjectUserName, Process, ParentProcessName, CommandLine\n| extend timestamp = TimeGenerated, AccountCustomEntity = Account, HostCustomEntity = Computer\n),\n(\nDeviceProcessEvents\n| where TimeGenerated >= ago(timeframe)\n| where InitiatingProcessCommandLine has_all (cmdList)\n| project Type, TimeGenerated, DeviceName, AccountName, InitiatingProcessAccountDomain, InitiatingProcessAccountName, InitiatingProcessFileName, InitiatingProcessParentFileName,  InitiatingProcessCommandLine\n| extend timestamp = TimeGenerated, AccountCustomEntity = AccountName, HostCustomEntity = DeviceName\n),\n(\nEvent\n| where TimeGenerated > ago(timeframe)\n| where Source == \"Microsoft-Windows-Sysmon\"\n| where EventID == 1\n| extend EventData = parse_xml(EventData).DataItem.EventData.Data\n| mv-expand bagexpansion=array EventData\n| evaluate bag_unpack(EventData)\n| extend Key=tostring(['@Name']), Value=['#text']\n| evaluate pivot(Key, any(Value), TimeGenerated, Source, EventLog, Computer, EventLevel, EventLevelName, EventID, UserName, RenderedDescription, MG, ManagementGroupName, Type, _ResourceId)\n| where TimeGenerated >= ago(timeframe)\n| where CommandLine has_all (cmdList)\n| extend Type = strcat(Type, \": \", Source)\n| project Type, TimeGenerated, Computer, User, Process, ParentImage, CommandLine\n| extend timestamp = TimeGenerated, AccountCustomEntity = User, HostCustomEntity = Computer\n)\n)\n",
+        "queryPeriod": "P1D",
+        "queryFrequency": "P1D",
+        "sentinelEntitiesMappings": null,
+        "severity": "Medium",
+        "suppressionDuration": "PT1H",
+        "suppressionEnabled": false,
+        "tactics": [
+          "PrivilegeEscalation"
+        ],
+        "techniques": null,
+        "templateVersion": null,
+        "triggerOperator": "GreaterThan",
+        "triggerThreshold": 0,
+        "alertRuleTemplateName": null,
+        "enabled": false
+      }
+    }
+  ]
+}

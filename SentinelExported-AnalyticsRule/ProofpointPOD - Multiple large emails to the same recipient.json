@@ -1,0 +1,64 @@
+{
+  "$schema": "https://schema.management.azure.com/schemas/2019-04-01/deploymentTemplate.json#",
+  "contentVersion": "1.0.0.0",
+  "parameters": {
+    "workspace": {
+      "type": "String"
+    }
+  },
+  "resources": [
+    {
+      "id": "[concat(resourceId('Microsoft.OperationalInsights/workspaces/providers', parameters('workspace'), 'Microsoft.SecurityInsights'),'/alertRules/54ebac83-0f89-4dfc-9eca-462858edc211')]",
+      "name": "[concat(parameters('workspace'),'/Microsoft.SecurityInsights/54ebac83-0f89-4dfc-9eca-462858edc211')]",
+      "type": "Microsoft.OperationalInsights/workspaces/providers/alertRules",
+      "kind": "Scheduled",
+      "apiVersion": "2023-02-01-preview",
+      "properties": {
+        "displayName": "ProofpointPOD - Multiple large emails to the same recipient",
+        "description": "Detects when multiple emails with lage size where sent to the same recipient.",
+        "alertDetailsOverride": null,
+        "customDetails": null,
+        "entityMappings": [
+          {
+            "entityType": "Account",
+            "fieldMappings": [
+              {
+                "columnName": "AccountCustomEntity",
+                "identifier": "FullName"
+              }
+            ]
+          }
+        ],
+        "eventGroupingSettings": null,
+        "incidentConfiguration": {
+          "createIncident": true,
+          "groupingConfiguration": {
+            "enabled": false,
+            "groupByAlertDetails": null,
+            "groupByCustomDetails": null,
+            "groupByEntities": [],
+            "lookbackDuration": "PT5M",
+            "matchingMethod": "AllEntities",
+            "reopenClosedIncident": false
+          }
+        },
+        "query": "let lbtime = 30m;\nlet msgthreshold = 3;\nlet msgszthreshold = 3000000;\nProofpointPOD\n| where TimeGenerated > ago(lbtime)\n| where EventType == 'message'\n| where NetworkDirection == 'outbound'\n| where NetworkBytes > msgszthreshold\n| summarize count() by SrcUserUpn, DstUserUpn\n| where count_ > msgthreshold\n| extend AccountCustomEntity = SrcUserUpn\n",
+        "queryPeriod": "PT30M",
+        "queryFrequency": "PT30M",
+        "sentinelEntitiesMappings": null,
+        "severity": "Medium",
+        "suppressionDuration": "PT1H",
+        "suppressionEnabled": false,
+        "tactics": [
+          "Exfiltration"
+        ],
+        "techniques": null,
+        "templateVersion": null,
+        "triggerOperator": "GreaterThan",
+        "triggerThreshold": 0,
+        "alertRuleTemplateName": null,
+        "enabled": false
+      }
+    }
+  ]
+}

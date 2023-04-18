@@ -1,0 +1,75 @@
+{
+  "$schema": "https://schema.management.azure.com/schemas/2019-04-01/deploymentTemplate.json#",
+  "contentVersion": "1.0.0.0",
+  "parameters": {
+    "workspace": {
+      "type": "String"
+    }
+  },
+  "resources": [
+    {
+      "id": "[concat(resourceId('Microsoft.OperationalInsights/workspaces/providers', parameters('workspace'), 'Microsoft.SecurityInsights'),'/alertRules/9d1ba8bb-8cf2-4bcf-804a-dab677689e35')]",
+      "name": "[concat(parameters('workspace'),'/Microsoft.SecurityInsights/9d1ba8bb-8cf2-4bcf-804a-dab677689e35')]",
+      "type": "Microsoft.OperationalInsights/workspaces/providers/alertRules",
+      "kind": "Scheduled",
+      "apiVersion": "2023-02-01-preview",
+      "properties": {
+        "displayName": "Several deny actions registered",
+        "description": "Identifies attack pattern when attacker tries to move, or scan, from resource to resource on the network and creates an incident when a source has more than 1 registered deny action in Azure Firewall.",
+        "alertDetailsOverride": null,
+        "customDetails": null,
+        "entityMappings": [
+          {
+            "entityType": "IP",
+            "fieldMappings": [
+              {
+                "columnName": "IPCustomEntity",
+                "identifier": "Address"
+              }
+            ]
+          },
+          {
+            "entityType": "URL",
+            "fieldMappings": [
+              {
+                "columnName": "URLCustomEntity",
+                "identifier": "Url"
+              }
+            ]
+          }
+        ],
+        "eventGroupingSettings": null,
+        "incidentConfiguration": {
+          "createIncident": true,
+          "groupingConfiguration": {
+            "enabled": false,
+            "groupByAlertDetails": null,
+            "groupByCustomDetails": null,
+            "groupByEntities": [],
+            "lookbackDuration": "PT5M",
+            "matchingMethod": "AllEntities",
+            "reopenClosedIncident": false
+          }
+        },
+        "query": "\nlet threshold = 1;\nAzureDiagnostics\n    | where OperationName in (\"AzureFirewallApplicationRuleLog\",\"AzureFirewallNetworkRuleLog\")\n    | extend msg_s_replaced0 = replace(@\"\\s\\s\",@\" \",msg_s)\n    | extend msg_s_replaced1 = replace(@\"\\.\\s\",@\" \",msg_s_replaced0)\n    | extend msg_a = split(msg_s_replaced1,\" \")\n    | extend srcAddr_a = split(msg_a[3],\":\") , destAddr_a = split(msg_a[5],\":\")\n    | extend protocol = tostring(msg_a[0]), srcIp = tostring(srcAddr_a[0]), srcPort = tostring(srcAddr_a[1]), destIp = tostring(destAddr_a[0]), destPort = tostring(destAddr_a[1]), action = tostring(msg_a[7])\n    | where action == \"Deny\"\n    | extend url = iff(destIp matches regex \"\\\\d+\\\\.\\\\d+\\\\.\\\\d+\\\\.\\\\d+\",\"\",destIp)\n    | summarize StartTime = min(TimeGenerated), count() by srcIp, destIp, url, action, protocol\n    | where count_ >= [\"threshold\"]\n    | extend timestamp = StartTime, URLCustomEntity = url, IPCustomEntity = srcIp\n",
+        "queryPeriod": "PT1H",
+        "queryFrequency": "PT1H",
+        "sentinelEntitiesMappings": null,
+        "severity": "Medium",
+        "suppressionDuration": "PT1H",
+        "suppressionEnabled": false,
+        "tactics": [
+          "Discovery",
+          "LateralMovement",
+          "CommandAndControl"
+        ],
+        "techniques": null,
+        "templateVersion": null,
+        "triggerOperator": "GreaterThan",
+        "triggerThreshold": 1,
+        "alertRuleTemplateName": null,
+        "enabled": false
+      }
+    }
+  ]
+}

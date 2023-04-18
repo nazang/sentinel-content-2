@@ -1,0 +1,64 @@
+{
+  "$schema": "https://schema.management.azure.com/schemas/2019-04-01/deploymentTemplate.json#",
+  "contentVersion": "1.0.0.0",
+  "parameters": {
+    "workspace": {
+      "type": "String"
+    }
+  },
+  "resources": [
+    {
+      "id": "[concat(resourceId('Microsoft.OperationalInsights/workspaces/providers', parameters('workspace'), 'Microsoft.SecurityInsights'),'/alertRules/fa8ab6fc-3ce1-4131-8c3c-2dfeb629d8bb')]",
+      "name": "[concat(parameters('workspace'),'/Microsoft.SecurityInsights/fa8ab6fc-3ce1-4131-8c3c-2dfeb629d8bb')]",
+      "type": "Microsoft.OperationalInsights/workspaces/providers/alertRules",
+      "kind": "Scheduled",
+      "apiVersion": "2023-02-01-preview",
+      "properties": {
+        "displayName": "User Assigned Privileged Role",
+        "description": "Identifies when a new privileged role is assigned to a user.  Any account eligible for a role is now being given privileged access. If the assignment is unexpected or into a role that isn't the responsibility of the account holder, investigate.\nRef : https://docs.microsoft.comazure/active-directory/fundamentals/security-operations-privileged-accounts#things-to-monitor-1",
+        "alertDetailsOverride": null,
+        "customDetails": null,
+        "entityMappings": [
+          {
+            "entityType": "Account",
+            "fieldMappings": [
+              {
+                "columnName": "AccountCustomEntity",
+                "identifier": "FullName"
+              }
+            ]
+          }
+        ],
+        "eventGroupingSettings": null,
+        "incidentConfiguration": {
+          "createIncident": true,
+          "groupingConfiguration": {
+            "enabled": false,
+            "groupByAlertDetails": null,
+            "groupByCustomDetails": null,
+            "groupByEntities": [],
+            "lookbackDuration": "PT5M",
+            "matchingMethod": "AllEntities",
+            "reopenClosedIncident": false
+          }
+        },
+        "query": "AuditLogs\n| where Category =~ \"RoleManagement\"\n| where AADOperationType in (\"Assign\", \"AssignEligibleRole\")\n| where ActivityDisplayName has_any (\"Add eligible member to role\", \"Add member to role\")\n| mv-expand TargetResources\n| mv-expand TargetResources.modifiedProperties\n| extend displayName_ = tostring(TargetResources_modifiedProperties.displayName)\n| where displayName_ =~ \"Role.DisplayName\"\n| extend RoleName = tostring(parse_json(tostring(TargetResources_modifiedProperties.newValue)))\n| where RoleName contains \"Admin\"\n| extend InitiatingApp = tostring(parse_json(tostring(InitiatedBy.app)).displayName)\n| extend Initiator = iif(isnotempty(InitiatingApp), InitiatingApp, tostring(parse_json(tostring(InitiatedBy.user)).userPrincipalName))\n| extend Target = tostring(TargetResources.userPrincipalName)\n| summarize by bin(TimeGenerated, 1h), OperationName,  RoleName, Target, Initiator, Result\n| extend AccountCustomEntity = Target\n",
+        "queryPeriod": "PT2H",
+        "queryFrequency": "PT2H",
+        "sentinelEntitiesMappings": null,
+        "severity": "High",
+        "suppressionDuration": "PT1H",
+        "suppressionEnabled": false,
+        "tactics": [
+          "Persistence"
+        ],
+        "techniques": null,
+        "templateVersion": null,
+        "triggerOperator": "GreaterThan",
+        "triggerThreshold": 0,
+        "alertRuleTemplateName": null,
+        "enabled": false
+      }
+    }
+  ]
+}

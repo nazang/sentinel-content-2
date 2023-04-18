@@ -1,0 +1,60 @@
+{
+  "$schema": "https://schema.management.azure.com/schemas/2019-04-01/deploymentTemplate.json#",
+  "contentVersion": "1.0.0.0",
+  "parameters": {
+    "workspace": {
+      "type": "String"
+    }
+  },
+  "resources": [
+    {
+      "id": "[concat(resourceId('Microsoft.OperationalInsights/workspaces/providers', parameters('workspace'), 'Microsoft.SecurityInsights'),'/alertRules/7d8e994b-b312-44a1-8ae3-107da940747c')]",
+      "name": "[concat(parameters('workspace'),'/Microsoft.SecurityInsights/7d8e994b-b312-44a1-8ae3-107da940747c')]",
+      "type": "Microsoft.OperationalInsights/workspaces/providers/alertRules",
+      "kind": "Scheduled",
+      "apiVersion": "2023-02-01-preview",
+      "properties": {
+        "displayName": "Vectra AI Detect - Host in the Low Quadrant",
+        "description": "Identifies multiple Detections coming from the same internal Host which caused a move into Detect's Low quadrant. \nTo meet this requirement, the threat score must be in 0-50 range and the certainty score in the 0-50 range (range is 1-100 for threat and certainty). If required, variables in the query can be adjusted to a different threshold. ",
+        "alertDetailsOverride": null,
+        "customDetails": null,
+        "entityMappings": null,
+        "eventGroupingSettings": null,
+        "incidentConfiguration": {
+          "createIncident": true,
+          "groupingConfiguration": {
+            "enabled": false,
+            "groupByAlertDetails": null,
+            "groupByCustomDetails": null,
+            "groupByEntities": [],
+            "lookbackDuration": "PT5M",
+            "matchingMethod": "AllEntities",
+            "reopenClosedIncident": false
+          }
+        },
+        "query": "let threat_score_max = 50;\nlet certainty_score_max = 50;\nCommonSecurityLog\n| where DeviceVendor == \"Vectra Networks\"\n| where DeviceProduct == \"X Series\"\n| where DeviceEventClassID == \"hsc\"\n| project-rename threat_score = FlexNumber1\n| project-rename certainty_score = FlexNumber2\n| project-rename vectra_URL = DeviceCustomString4\n| project-rename detection_name = DeviceEventClassID\n| project-rename score_decreases = DeviceCustomString3\n| where threat_score < threat_score_max and certainty_score < certainty_score_max\n//keep only the event with the highest threat score per Host\n| summarize arg_max(threat_score, *) by SourceHostName\n| project SourceHostName, TimeGenerated, SourceIP, threat_score, certainty_score, vectra_URL\n",
+        "queryPeriod": "PT1H",
+        "queryFrequency": "PT1H",
+        "sentinelEntitiesMappings": null,
+        "severity": "Low",
+        "suppressionDuration": "PT1H",
+        "suppressionEnabled": false,
+        "tactics": [
+          "CredentialAccess",
+          "Discovery",
+          "LateralMovement",
+          "Collection",
+          "CommandAndControl",
+          "Exfiltration",
+          "Impact"
+        ],
+        "techniques": null,
+        "templateVersion": null,
+        "triggerOperator": "GreaterThan",
+        "triggerThreshold": 0,
+        "alertRuleTemplateName": null,
+        "enabled": false
+      }
+    }
+  ]
+}

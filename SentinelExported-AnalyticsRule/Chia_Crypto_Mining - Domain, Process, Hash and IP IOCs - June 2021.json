@@ -1,0 +1,82 @@
+{
+  "$schema": "https://schema.management.azure.com/schemas/2019-04-01/deploymentTemplate.json#",
+  "contentVersion": "1.0.0.0",
+  "parameters": {
+    "workspace": {
+      "type": "String"
+    }
+  },
+  "resources": [
+    {
+      "id": "[concat(resourceId('Microsoft.OperationalInsights/workspaces/providers', parameters('workspace'), 'Microsoft.SecurityInsights'),'/alertRules/a8524d00-9166-44e8-82ce-053115d64506')]",
+      "name": "[concat(parameters('workspace'),'/Microsoft.SecurityInsights/a8524d00-9166-44e8-82ce-053115d64506')]",
+      "type": "Microsoft.OperationalInsights/workspaces/providers/alertRules",
+      "kind": "Scheduled",
+      "apiVersion": "2023-02-01-preview",
+      "properties": {
+        "displayName": "Chia_Crypto_Mining - Domain, Process, Hash and IP IOCs - June 2021",
+        "description": "Identifies a match across various data feeds for domains, process, hashes and IP IOC related to Chia cryptocurrency farming/plotting activity.",
+        "alertDetailsOverride": null,
+        "customDetails": null,
+        "entityMappings": [
+          {
+            "entityType": "Account",
+            "fieldMappings": [
+              {
+                "columnName": "AccountCustomEntity",
+                "identifier": "FullName"
+              }
+            ]
+          },
+          {
+            "entityType": "Host",
+            "fieldMappings": [
+              {
+                "columnName": "HostCustomEntity",
+                "identifier": "FullName"
+              }
+            ]
+          },
+          {
+            "entityType": "IP",
+            "fieldMappings": [
+              {
+                "columnName": "IPCustomEntity",
+                "identifier": "Address"
+              }
+            ]
+          }
+        ],
+        "eventGroupingSettings": null,
+        "incidentConfiguration": {
+          "createIncident": true,
+          "groupingConfiguration": {
+            "enabled": false,
+            "groupByAlertDetails": null,
+            "groupByCustomDetails": null,
+            "groupByEntities": [],
+            "lookbackDuration": "PT5M",
+            "matchingMethod": "AllEntities",
+            "reopenClosedIncident": false
+          }
+        },
+        "query": "let iocs = externaldata(DateAdded:string,IoC:string,Type:string,TLP:string) [@\"https://raw.githubusercontent.com/Azure/Azure-Sentinel/master/Sample%20Data/Feeds/ChiaCryptoIOC.csv\"] with (format=\"csv\", ignoreFirstRecord=True);\nlet process = (iocs | where Type =~ \"process\" | project IoC);\nlet sha256Hashes = (iocs | where Type =~ \"sha256\" | project IoC);\nlet IPList = (iocs | where Type =~ \"ip\"| project IoC);\nlet domains = (iocs | where Type =~ \"domainname\"| project IoC);\nlet IPRegex = '[0-9]{1,3}\\\\.[0-9]{1,3}\\\\.[0-9]{1,3}\\\\.[0-9]{1,3}';\n(union isfuzzy=true\n(CommonSecurityLog\n| where SourceIP in (IPList) or DestinationIP in (IPList) or DestinationHostName has_any (domains) or RequestURL has_any (domains) or Message has_any (IPList)\n| parse Message with * '(' DNSName ')' * \n| project TimeGenerated, SourceIP, DestinationIP, Message, SourceUserID, RequestURL, DNSName, Type\n| extend MessageIP = extract(IPRegex, 0, Message), RequestIP = extract(IPRegex, 0, RequestURL)\n| extend IPMatch = case(SourceIP in (IPList), \"SourceIP\", DestinationIP in (IPList), \"DestinationIP\", MessageIP in (IPList), \"Message\", RequestURL has_any (domains), \"RequestUrl\", \"NoMatch\"),  AlertDetail = 'Chia crypto IOC detected'\n| extend timestamp = TimeGenerated, IPCustomEntity = case(IPMatch == \"SourceIP\", SourceIP, IPMatch == \"DestinationIP\", DestinationIP, IPMatch == \"Message\", MessageIP, \"NoMatch\"), AccountCustomEntity = SourceUserID, UrlCustomEntity = RequestURL \n),\n(DnsEvents\n| where IPAddresses in (IPList) or Name in~ (domains)  \n| project TimeGenerated, Computer, IPAddresses, Name, ClientIP, Type\n| extend DestinationIPAddress = IPAddresses, DNSName = Name, Host = Computer , AlertDetail = 'Chia crypto IOC detected'\n| extend timestamp = TimeGenerated, IPCustomEntity = DestinationIPAddress, HostCustomEntity = Host\n),\n(VMConnection\n| where SourceIp in (IPList) or DestinationIp in (IPList) or RemoteDnsCanonicalNames has_any (domains)\n| parse RemoteDnsCanonicalNames with * '[\"' DNSName '\"]' *\n| project TimeGenerated, Computer, Direction, ProcessName, SourceIp, DestinationIp, DestinationPort, RemoteDnsQuestions, DNSName,BytesSent, BytesReceived, RemoteCountry, Type\n| extend IPMatch = case( SourceIp in (IPList), \"SourceIP\", DestinationIp in (IPList), \"DestinationIP\", \"None\") , AlertDetail = 'Chia crypto IOC detected'\n| extend timestamp = TimeGenerated, IPCustomEntity = case(IPMatch == \"SourceIP\", SourceIp, IPMatch == \"DestinationIP\", DestinationIp, \"NoMatch\"), HostCustomEntity = Computer, ProcessCustomEntity = ProcessName\n),\n(Event\n//This query uses sysmon data depending on table name used this may need updating\n| where Source == \"Microsoft-Windows-Sysmon\"\n| where EventID == 3\n| extend EvData = parse_xml(EventData)\n| extend EventDetail = EvData.DataItem.EventData.Data\n| extend SourceIP = EventDetail.[9].[\"#text\"], DestinationIP = EventDetail.[14].[\"#text\"], Image = EventDetail.[4].[\"#text\"]\n| where SourceIP in (IPList) or DestinationIP in (IPList) or Image has_any (process)\n| project TimeGenerated, SourceIP, DestinationIP, Image, UserName, Computer, Type\n| extend IPMatch = case( SourceIP in (IPList), \"SourceIP\", DestinationIP in (IPList), \"DestinationIP\", \"None\") , AlertDetail = 'Chia crypto IOC detected'\n| extend timestamp = TimeGenerated, AccountCustomEntity = UserName, ProcessCustomEntity = split(Image, '\\\\', -1)[-1], HostCustomEntity = Computer , IPCustomEntity = case(IPMatch == \"SourceIP\", SourceIP, IPMatch == \"DestinationIP\", DestinationIP, \"None\")\n),  \n(OfficeActivity\n| where ClientIP in (IPList) \n| project TimeGenerated, UserAgent, Operation, RecordType, UserId, ClientIP, AlertDetail = 'Chia crypto IOC detected', Type\n| extend timestamp = TimeGenerated, IPCustomEntity = ClientIP, AccountCustomEntity = UserId\n),\n(DeviceNetworkEvents\n| where RemoteUrl has_any (domains) or RemoteIP in (IPList) or InitiatingProcessSHA256 in (sha256Hashes) or InitiatingProcessFileName has_any (process)\n| project TimeGenerated, ActionType, DeviceId, DeviceName, InitiatingProcessAccountDomain, InitiatingProcessAccountName, InitiatingProcessCommandLine, InitiatingProcessFolderPath, InitiatingProcessId, InitiatingProcessParentFileName, InitiatingProcessFileName, RemoteIP, RemoteUrl, RemotePort, LocalIP, Type\n| extend timestamp = TimeGenerated, IPCustomEntity = RemoteIP, HostCustomEntity = DeviceName,  AlertDetail = 'Chia crypto IOC detected', UrlCustomEntity =RemoteUrl\n),\n(WindowsFirewall\n| where SourceIP in (IPList) or DestinationIP in (IPList) \n| project TimeGenerated, Computer, CommunicationDirection, SourceIP, DestinationIP, SourcePort, DestinationPort, Type\n| extend IPMatch = case( SourceIP in (IPList), \"SourceIP\", DestinationIP in (IPList), \"DestinationIP\", \"None\"), AlertDetail = 'Chia crypto IOC detected'\n| extend timestamp = TimeGenerated, HostCustomEntity = Computer , IPCustomEntity = case(IPMatch == \"SourceIP\", SourceIP, IPMatch == \"DestinationIP\", DestinationIP, \"None\")\n),\n(AzureDiagnostics\n| where ResourceType == \"AZUREFIREWALLS\"\n| where Category == \"AzureFirewallDnsProxy\"\n| project TimeGenerated,Resource, msg_s, Type\n| parse msg_s with \"DNS Request: \" ClientIP \":\" ClientPort \" - \" QueryID \" \" Request_Type \" \" Request_Class \" \" Request_Name \". \" Request_Protocol \" \" Request_Size \" \" EDNSO_DO \" \" EDNS0_Buffersize \" \" Responce_Code \" \" Responce_Flags \" \" Responce_Size \" \" Response_Duration\n| where Request_Name has_any (domains)  or ClientIP in (IPList)\n| extend timestamp = TimeGenerated, DNSName = Request_Name, IPCustomEntity = ClientIP, AlertDetail = 'Chia crypto IOC detected'\n),\n(AzureDiagnostics \n| where ResourceType == \"AZUREFIREWALLS\"\n| where Category == \"AzureFirewallApplicationRule\"\n| project TimeGenerated,Resource, msg_s\n| parse msg_s with Protocol 'request from ' SourceHost ':' SourcePort 'to ' DestinationHost ':' DestinationPort '. Action:' Action\n| where isnotempty(DestinationHost)\n| where DestinationHost has_any (domains)  \n| extend timestamp = TimeGenerated, DNSName = DestinationHost, IPCustomEntity = SourceHost, AlertDetail = 'Chia crypto IOC detected'\n),\n(Event\n//This query uses sysmon data depending on table name used this may need updating\n| where Source == \"Microsoft-Windows-Sysmon\"\n| extend EvData = parse_xml(EventData)\n| extend EventDetail = EvData.DataItem.EventData.Data\n| where EventDetail has_any (sha256Hashes) \n| parse EventDetail with * 'SHA256=' SHA256 '\",' *\n| project TimeGenerated, EventDetail, UserName, Computer, Type, Source, SHA256\n| extend Type = strcat(Type, \": \", Source), Account = UserName, FileHash = SHA256, Image = EventDetail.[4].[\"#text\"] , AlertDetail = 'Chia crypto IOC detected'\n| extend timestamp = TimeGenerated, HostCustomEntity = Computer , AccountCustomEntity = Account, ProcessCustomEntity = split(Image, '\\\\', -1)[-1], FileHashCustomEntity = FileHash\n),\n(DeviceFileEvents\n| where  InitiatingProcessFolderPath has_any (process)\n| project TimeGenerated, ActionType, DeviceId, DeviceName, InitiatingProcessAccountDomain, InitiatingProcessAccountName, InitiatingProcessCommandLine, InitiatingProcessFolderPath, InitiatingProcessId, InitiatingProcessParentFileName, InitiatingProcessFileName, RequestAccountName, RequestSourceIP, InitiatingProcessSHA256, Type\n| extend Account = RequestAccountName, Computer = DeviceName, IPAddress = RequestSourceIP, CommandLine = InitiatingProcessCommandLine, FileHash = InitiatingProcessSHA256, AlertDetail = 'Chia crypto IOC detected'\n| extend timestamp = TimeGenerated, HostCustomEntity = Computer , AccountCustomEntity = Account, ProcessCustomEntity = InitiatingProcessFileName, FileHashCustomEntity = FileHash\n),\n(CommonSecurityLog\n| where FileHash in (sha256Hashes)\n| project TimeGenerated,  Message, SourceUserID, FileHash, Type\n| extend timestamp = TimeGenerated, FileHashCustomEntity = FileHash, AlertDetail = 'Chia crypto IOC detected'\n),\n(Event\n//This query uses sysmon data depending on table name used this may need updating\n| where Source == \"Microsoft-Windows-Sysmon\"\n| where EventID == 1\n| extend EvData = parse_xml(EventData)\n| extend EventDetail = EvData.DataItem.EventData.Data\n| project TimeGenerated, EventDetail, UserName, Computer, Type\n| extend Image = EventDetail.[4].[\"#text\"] , CommandLine =  EventDetail.[10].[\"#text\"], Account = UserName, FileHash = EventDetail.[17].[\"#text\"] , AlertDetail = 'Chia crypto IOC detected'\n| where Image has_any (process)\n| extend timestamp = TimeGenerated, HostCustomEntity = Computer , AccountCustomEntity = Account, ProcessCustomEntity = split(Image, '\\\\', -1)[-1], FileHashCustomEntity = FileHash\n),\n(DeviceEvents\n| where  InitiatingProcessFileName has_any (process) or InitiatingProcessSHA256 in~ (sha256Hashes)\n| project TimeGenerated, ActionType, DeviceId, DeviceName, InitiatingProcessAccountDomain, InitiatingProcessAccountName, InitiatingProcessCommandLine, InitiatingProcessFolderPath, InitiatingProcessId, InitiatingProcessParentFileName, InitiatingProcessFileName, InitiatingProcessSHA256, Type\n| extend Account = InitiatingProcessAccountName, Computer = DeviceName, CommandLine = InitiatingProcessCommandLine, FileHash = InitiatingProcessSHA256, Image = InitiatingProcessFolderPath, AlertDetail = 'Chia crypto IOC detected'\n| extend timestamp = TimeGenerated, HostCustomEntity = Computer , AccountCustomEntity = Account, ProcessCustomEntity = InitiatingProcessFileName, FileHashCustomEntity = FileHash\n),\n(  SecurityEvent\n| where EventID == '4688'\n| where NewProcessName  has_any (process)\n| project TimeGenerated, Computer, NewProcessName, ParentProcessName, Account, NewProcessId, Type\n| extend timestamp = TimeGenerated, HostCustomEntity = Computer , AccountCustomEntity = Account, ProcessCustomEntity = NewProcessName, AlertDetail = 'Chia crypto IOC detected'\n)\n)\n",
+        "queryPeriod": "PT6H",
+        "queryFrequency": "PT6H",
+        "sentinelEntitiesMappings": null,
+        "severity": "Low",
+        "suppressionDuration": "PT1H",
+        "suppressionEnabled": false,
+        "tactics": [
+          "Impact"
+        ],
+        "techniques": null,
+        "templateVersion": null,
+        "triggerOperator": "GreaterThan",
+        "triggerThreshold": 0,
+        "alertRuleTemplateName": null,
+        "enabled": false
+      }
+    }
+  ]
+}

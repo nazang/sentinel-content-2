@@ -1,0 +1,65 @@
+{
+  "$schema": "https://schema.management.azure.com/schemas/2019-04-01/deploymentTemplate.json#",
+  "contentVersion": "1.0.0.0",
+  "parameters": {
+    "workspace": {
+      "type": "String"
+    }
+  },
+  "resources": [
+    {
+      "id": "[concat(resourceId('Microsoft.OperationalInsights/workspaces/providers', parameters('workspace'), 'Microsoft.SecurityInsights'),'/alertRules/71ac1079-616b-49a2-ac49-3ac3498574a0')]",
+      "name": "[concat(parameters('workspace'),'/Microsoft.SecurityInsights/71ac1079-616b-49a2-ac49-3ac3498574a0')]",
+      "type": "Microsoft.OperationalInsights/workspaces/providers/alertRules",
+      "kind": "Scheduled",
+      "apiVersion": "2023-02-01-preview",
+      "properties": {
+        "displayName": "ProofpointPOD - Email sender in TI list",
+        "description": "Email sender in TI list.",
+        "alertDetailsOverride": null,
+        "customDetails": null,
+        "entityMappings": [
+          {
+            "entityType": "Account",
+            "fieldMappings": [
+              {
+                "columnName": "AccountCustomEntity",
+                "identifier": "FullName"
+              }
+            ]
+          }
+        ],
+        "eventGroupingSettings": null,
+        "incidentConfiguration": {
+          "createIncident": true,
+          "groupingConfiguration": {
+            "enabled": false,
+            "groupByAlertDetails": null,
+            "groupByCustomDetails": null,
+            "groupByEntities": [],
+            "lookbackDuration": "PT5M",
+            "matchingMethod": "AllEntities",
+            "reopenClosedIncident": false
+          }
+        },
+        "query": "let ioc_lookBack = 30d;\nlet timeframe = 1h;\nlet TI_email_List =\nThreatIntelligenceIndicator\n| where TimeGenerated > ago(ioc_lookBack)\n| where isnotempty(EmailSenderAddress)\n| summarize make_list(EmailSenderAddress);\nProofpointPOD \n| where TimeGenerated > ago(timeframe)\n| where isnotempty(SrcUserUpn)\n| where SrcUserUpn in~ (TI_email_List)\n| extend Message = \"Email sender in TI list\"\n| project Message, SrcUserUpn, DstUserUpn\n| extend AccountCustomEntity = SrcUserUpn\n",
+        "queryPeriod": "P14D",
+        "queryFrequency": "P1D",
+        "sentinelEntitiesMappings": null,
+        "severity": "Medium",
+        "suppressionDuration": "PT1H",
+        "suppressionEnabled": false,
+        "tactics": [
+          "Exfiltration",
+          "InitialAccess"
+        ],
+        "techniques": null,
+        "templateVersion": null,
+        "triggerOperator": "GreaterThan",
+        "triggerThreshold": 0,
+        "alertRuleTemplateName": null,
+        "enabled": false
+      }
+    }
+  ]
+}

@@ -1,0 +1,64 @@
+{
+  "$schema": "https://schema.management.azure.com/schemas/2019-04-01/deploymentTemplate.json#",
+  "contentVersion": "1.0.0.0",
+  "parameters": {
+    "workspace": {
+      "type": "String"
+    }
+  },
+  "resources": [
+    {
+      "id": "[concat(resourceId('Microsoft.OperationalInsights/workspaces/providers', parameters('workspace'), 'Microsoft.SecurityInsights'),'/alertRules/e1794a6f-0622-4eeb-b3f7-77129d8298cb')]",
+      "name": "[concat(parameters('workspace'),'/Microsoft.SecurityInsights/e1794a6f-0622-4eeb-b3f7-77129d8298cb')]",
+      "type": "Microsoft.OperationalInsights/workspaces/providers/alertRules",
+      "kind": "Scheduled",
+      "apiVersion": "2023-02-01-preview",
+      "properties": {
+        "displayName": "Excessive NXDOMAIN DNS Queries (Normalized DNS)",
+        "description": "This creates an incident in the event a client generates excessive amounts of DNS queries for non-existent domains. \nTo use this analytics rule, make sure you have deployed the [ASIM normalization parsers](https://aka.ms/AzSentinelDns)",
+        "alertDetailsOverride": null,
+        "customDetails": null,
+        "entityMappings": [
+          {
+            "entityType": "IP",
+            "fieldMappings": [
+              {
+                "columnName": "IPCustomEntity",
+                "identifier": "Address"
+              }
+            ]
+          }
+        ],
+        "eventGroupingSettings": null,
+        "incidentConfiguration": {
+          "createIncident": true,
+          "groupingConfiguration": {
+            "enabled": false,
+            "groupByAlertDetails": null,
+            "groupByCustomDetails": null,
+            "groupByEntities": [],
+            "lookbackDuration": "PT5M",
+            "matchingMethod": "AllEntities",
+            "reopenClosedIncident": false
+          }
+        },
+        "query": "let threshold = 200;\nimDns(responsecodename='NXDOMAIN')\n| where isnotempty(DnsResponseCodeName)\n//| where DnsResponseCodeName =~ \"NXDOMAIN\"\n| summarize count() by SrcIpAddr, bin(TimeGenerated,15m)\n| where count_ > threshold\n| join kind=inner (imDns(responsecodename='NXDOMAIN')\n    ) on SrcIpAddr\n| extend timestamp = TimeGenerated, IPCustomEntity = SrcIpAddr\n",
+        "queryPeriod": "PT1H",
+        "queryFrequency": "PT1H",
+        "sentinelEntitiesMappings": null,
+        "severity": "Medium",
+        "suppressionDuration": "PT1H",
+        "suppressionEnabled": false,
+        "tactics": [
+          "CommandAndControl"
+        ],
+        "techniques": null,
+        "templateVersion": null,
+        "triggerOperator": "GreaterThan",
+        "triggerThreshold": 0,
+        "alertRuleTemplateName": null,
+        "enabled": false
+      }
+    }
+  ]
+}

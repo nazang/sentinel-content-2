@@ -1,0 +1,54 @@
+{
+  "$schema": "https://schema.management.azure.com/schemas/2019-04-01/deploymentTemplate.json#",
+  "contentVersion": "1.0.0.0",
+  "parameters": {
+    "workspace": {
+      "type": "String"
+    }
+  },
+  "resources": [
+    {
+      "id": "[concat(resourceId('Microsoft.OperationalInsights/workspaces/providers', parameters('workspace'), 'Microsoft.SecurityInsights'),'/alertRules/3873733a-e45e-453b-b318-a02b3d6b4f89')]",
+      "name": "[concat(parameters('workspace'),'/Microsoft.SecurityInsights/3873733a-e45e-453b-b318-a02b3d6b4f89')]",
+      "type": "Microsoft.OperationalInsights/workspaces/providers/alertRules",
+      "kind": "Scheduled",
+      "apiVersion": "2023-02-01-preview",
+      "properties": {
+        "displayName": "Cisco Umbrella - Connection to Unpopular Website Detected",
+        "description": "Detects first connection to an unpopular website (possible malicious payload delivery).",
+        "alertDetailsOverride": null,
+        "customDetails": null,
+        "entityMappings": null,
+        "eventGroupingSettings": null,
+        "incidentConfiguration": {
+          "createIncident": true,
+          "groupingConfiguration": {
+            "enabled": false,
+            "groupByAlertDetails": null,
+            "groupByCustomDetails": null,
+            "groupByEntities": [],
+            "lookbackDuration": "PT5M",
+            "matchingMethod": "AllEntities",
+            "reopenClosedIncident": false
+          }
+        },
+        "query": "let domain_lookBack= 14d;\nlet timeframe = 1d;\nlet top_million_list = Cisco_Umbrella\n| where EventType == \"proxylogs\"\n| where TimeGenerated > ago(domain_lookBack) and TimeGenerated < ago(timeframe)\n| extend Hostname = parse_url(UrlOriginal)[\"Host\"]\n| summarize count() by tostring(Hostname)\n| top 1000000 by count_\n| summarize make_list(Hostname);\nCisco_Umbrella\n| where EventType == \"proxylogs\"\n| where TimeGenerated > ago(timeframe)\n| extend Hostname = parse_url(UrlOriginal)[\"Host\"]\n| where Hostname !in (top_million_list)\n| extend Message = \"Connect to unpopular website (possible malicious payload delivery)\"\n| project Message, SrcIpAddr, DstIpAddr,UrlOriginal, TimeGenerated\n| extend IpCustomEntity = SrcIpAddr, UrlCustomEntity = UrlOriginal\n",
+        "queryPeriod": "P14D",
+        "queryFrequency": "P1D",
+        "sentinelEntitiesMappings": null,
+        "severity": "Medium",
+        "suppressionDuration": "PT1H",
+        "suppressionEnabled": false,
+        "tactics": [
+          "CommandAndControl"
+        ],
+        "techniques": null,
+        "templateVersion": null,
+        "triggerOperator": "GreaterThan",
+        "triggerThreshold": 0,
+        "alertRuleTemplateName": null,
+        "enabled": false
+      }
+    }
+  ]
+}

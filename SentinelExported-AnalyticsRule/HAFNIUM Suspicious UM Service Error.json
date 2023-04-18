@@ -1,0 +1,64 @@
+{
+  "$schema": "https://schema.management.azure.com/schemas/2019-04-01/deploymentTemplate.json#",
+  "contentVersion": "1.0.0.0",
+  "parameters": {
+    "workspace": {
+      "type": "String"
+    }
+  },
+  "resources": [
+    {
+      "id": "[concat(resourceId('Microsoft.OperationalInsights/workspaces/providers', parameters('workspace'), 'Microsoft.SecurityInsights'),'/alertRules/8e31bdc1-d56e-4a1d-aec0-3b75818c9e7d')]",
+      "name": "[concat(parameters('workspace'),'/Microsoft.SecurityInsights/8e31bdc1-d56e-4a1d-aec0-3b75818c9e7d')]",
+      "type": "Microsoft.OperationalInsights/workspaces/providers/alertRules",
+      "kind": "Scheduled",
+      "apiVersion": "2023-02-01-preview",
+      "properties": {
+        "displayName": "HAFNIUM Suspicious UM Service Error",
+        "description": "This query looks for errors that may indicate that an attacker is attempting to exploit a vulnerability in the service. \nReference: https://www.microsoft.com/security/blog/2021/03/02/hafnium-targeting-exchange-servers/",
+        "alertDetailsOverride": null,
+        "customDetails": null,
+        "entityMappings": [
+          {
+            "entityType": "Host",
+            "fieldMappings": [
+              {
+                "columnName": "HostCustomEntity",
+                "identifier": "FullName"
+              }
+            ]
+          }
+        ],
+        "eventGroupingSettings": null,
+        "incidentConfiguration": {
+          "createIncident": true,
+          "groupingConfiguration": {
+            "enabled": false,
+            "groupByAlertDetails": null,
+            "groupByCustomDetails": null,
+            "groupByEntities": [],
+            "lookbackDuration": "PT5M",
+            "matchingMethod": "AllEntities",
+            "reopenClosedIncident": false
+          }
+        },
+        "query": "Event\n| where EventLog =~ \"Application\"\n| where Source startswith \"MSExchange\"\n| where EventLevelName =~ \"error\"\n| where (RenderedDescription startswith \"Watson report\" and RenderedDescription contains \"umworkerprocess\" and RenderedDescription contains \"TextFormattingRunProperties\") or RenderedDescription startswith \"An unhandled exception occurred in a UM worker process\" or RenderedDescription startswith \"The Microsoft Exchange Unified Messaging service\" or RenderedDescription contains \"MSExchange Unified Messaging\"\n| where RenderedDescription !contains \"System.OutOfMemoryException\"\n| extend timestamp = TimeGenerated, HostCustomEntity = Computer\n",
+        "queryPeriod": "P1D",
+        "queryFrequency": "P1D",
+        "sentinelEntitiesMappings": null,
+        "severity": "Low",
+        "suppressionDuration": "PT1H",
+        "suppressionEnabled": false,
+        "tactics": [
+          "InitialAccess"
+        ],
+        "techniques": null,
+        "templateVersion": null,
+        "triggerOperator": "GreaterThan",
+        "triggerThreshold": 0,
+        "alertRuleTemplateName": null,
+        "enabled": false
+      }
+    }
+  ]
+}

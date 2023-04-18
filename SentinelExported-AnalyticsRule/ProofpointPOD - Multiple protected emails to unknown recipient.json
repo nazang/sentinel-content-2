@@ -1,0 +1,64 @@
+{
+  "$schema": "https://schema.management.azure.com/schemas/2019-04-01/deploymentTemplate.json#",
+  "contentVersion": "1.0.0.0",
+  "parameters": {
+    "workspace": {
+      "type": "String"
+    }
+  },
+  "resources": [
+    {
+      "id": "[concat(resourceId('Microsoft.OperationalInsights/workspaces/providers', parameters('workspace'), 'Microsoft.SecurityInsights'),'/alertRules/4534a7d8-04bc-44ae-b7ce-9fae83c5c206')]",
+      "name": "[concat(parameters('workspace'),'/Microsoft.SecurityInsights/4534a7d8-04bc-44ae-b7ce-9fae83c5c206')]",
+      "type": "Microsoft.OperationalInsights/workspaces/providers/alertRules",
+      "kind": "Scheduled",
+      "apiVersion": "2023-02-01-preview",
+      "properties": {
+        "displayName": "ProofpointPOD - Multiple protected emails to unknown recipient",
+        "description": "Detects when multiple protected messages where sent to early not seen recipient.",
+        "alertDetailsOverride": null,
+        "customDetails": null,
+        "entityMappings": [
+          {
+            "entityType": "Account",
+            "fieldMappings": [
+              {
+                "columnName": "AccountCustomEntity",
+                "identifier": "FullName"
+              }
+            ]
+          }
+        ],
+        "eventGroupingSettings": null,
+        "incidentConfiguration": {
+          "createIncident": true,
+          "groupingConfiguration": {
+            "enabled": false,
+            "groupByAlertDetails": null,
+            "groupByCustomDetails": null,
+            "groupByEntities": [],
+            "lookbackDuration": "PT5M",
+            "matchingMethod": "AllEntities",
+            "reopenClosedIncident": false
+          }
+        },
+        "query": "let lbtime = 30m;\nlet lbperiod = 30d;\nlet knownrecipients = ProofpointPOD\n| where TimeGenerated > ago(lbperiod)\n| where EventType == 'message'\n| where NetworkDirection == 'outbound'\n| where SrcUserUpn != ''\n| where array_length(todynamic(DstUserUpn)) == 1\n| summarize recipients = make_set(tostring(todynamic(DstUserUpn)[0])) by SrcUserUpn\n| extend commcol = SrcUserUpn;\nProofpointPOD\n| where TimeGenerated between (ago(lbtime) .. now())\n| where EventType == 'message'\n| where NetworkDirection == 'outbound'\n| extend isProtected = todynamic(MsgParts)[0]['isProtected']\n| extend mimePgp = todynamic(MsgParts)[0]['detectedMime']\n| where isProtected == 'true' or mimePgp == 'application/pgp-encrypted'\n| extend DstUserMail = tostring(todynamic(DstUserUpn)[0])\n| extend commcol = tostring(todynamic(DstUserUpn)[0])\n| join knownrecipients on commcol\n| where recipients !contains DstUserMail\n| project SrcUserUpn, DstUserMail\n| extend AccountCustomEntity = SrcUserUpn\n",
+        "queryPeriod": "PT30M",
+        "queryFrequency": "PT30M",
+        "sentinelEntitiesMappings": null,
+        "severity": "Medium",
+        "suppressionDuration": "PT1H",
+        "suppressionEnabled": false,
+        "tactics": [
+          "Exfiltration"
+        ],
+        "techniques": null,
+        "templateVersion": null,
+        "triggerOperator": "GreaterThan",
+        "triggerThreshold": 0,
+        "alertRuleTemplateName": null,
+        "enabled": false
+      }
+    }
+  ]
+}

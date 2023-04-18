@@ -1,0 +1,54 @@
+{
+  "$schema": "https://schema.management.azure.com/schemas/2019-04-01/deploymentTemplate.json#",
+  "contentVersion": "1.0.0.0",
+  "parameters": {
+    "workspace": {
+      "type": "String"
+    }
+  },
+  "resources": [
+    {
+      "id": "[concat(resourceId('Microsoft.OperationalInsights/workspaces/providers', parameters('workspace'), 'Microsoft.SecurityInsights'),'/alertRules/597f7561-f3c3-4e88-8623-f0c478097d26')]",
+      "name": "[concat(parameters('workspace'),'/Microsoft.SecurityInsights/597f7561-f3c3-4e88-8623-f0c478097d26')]",
+      "type": "Microsoft.OperationalInsights/workspaces/providers/alertRules",
+      "kind": "Scheduled",
+      "apiVersion": "2023-02-01-preview",
+      "properties": {
+        "displayName": "Cisco Umbrella - Hack Tool User-Agent Detected",
+        "description": "Detects suspicious user agent strings used by known hack tools",
+        "alertDetailsOverride": null,
+        "customDetails": null,
+        "entityMappings": null,
+        "eventGroupingSettings": null,
+        "incidentConfiguration": {
+          "createIncident": true,
+          "groupingConfiguration": {
+            "enabled": false,
+            "groupByAlertDetails": null,
+            "groupByCustomDetails": null,
+            "groupByEntities": [],
+            "lookbackDuration": "PT5M",
+            "matchingMethod": "AllEntities",
+            "reopenClosedIncident": false
+          }
+        },
+        "query": "let timeframe = 15m;\nlet user_agents=dynamic([\n                          '(hydra)',\n                          ' arachni/',\n                          ' BFAC ',\n                          ' brutus ',\n                          ' cgichk ',\n                          'core-project/1.0',\n                          ' crimscanner/',\n                          'datacha0s',\n                          'dirbuster',\n                          'domino hunter',\n                          'dotdotpwn',\n                          'FHScan Core',\n                          'floodgate',\n                          'get-minimal',\n                          'gootkit auto-rooter scanner',\n                          'grendel-scan',\n                          ' inspath ',\n                          'internet ninja',\n                          'jaascois',\n                          ' zmeu ',\n                          'masscan',\n                          ' metis ',\n                          'morfeus fucking scanner',\n                          'n-stealth',\n                          'nsauditor',\n                          'pmafind',\n                          'security scan',\n                          'springenwerk',\n                          'teh forest lobster',\n                          'toata dragostea',\n                          ' vega/',\n                          'voideye',\n                          'webshag',\n                          'webvulnscan',\n                          ' whcc/',\n                          ' Havij',\n                          'absinthe',\n                          'bsqlbf',\n                          'mysqloit',\n                          'pangolin',\n                          'sql power injector',\n                          'sqlmap',\n                          'sqlninja',\n                          'uil2pn',\n                          'ruler',\n                          'Mozilla/5.0 (Windows; U; Windows NT 5.1; pt-PT; rv:1.9.1.2) Gecko/20090729 Firefox/3.5.2 (.NET CLR 3.5.30729)'\n                          ]);\nCisco_Umbrella\n| where EventType == \"proxylogs\"\n| where TimeGenerated > ago(timeframe)\n| where HttpUserAgentOriginal has_any (user_agents)\n| extend Message = \"Hack Tool User Agent\"\n| project Message, SrcIpAddr, DstIpAddr, UrlOriginal, TimeGenerated, HttpUserAgentOriginal\n| extend IpCustomEntity = SrcIpAddr, UrlCustomEntity = UrlOriginal\n",
+        "queryPeriod": "PT15M",
+        "queryFrequency": "PT15M",
+        "sentinelEntitiesMappings": null,
+        "severity": "Medium",
+        "suppressionDuration": "PT1H",
+        "suppressionEnabled": false,
+        "tactics": [
+          "CommandAndControl"
+        ],
+        "techniques": null,
+        "templateVersion": null,
+        "triggerOperator": "GreaterThan",
+        "triggerThreshold": 0,
+        "alertRuleTemplateName": null,
+        "enabled": false
+      }
+    }
+  ]
+}

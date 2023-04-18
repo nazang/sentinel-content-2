@@ -1,0 +1,74 @@
+{
+  "$schema": "https://schema.management.azure.com/schemas/2019-04-01/deploymentTemplate.json#",
+  "contentVersion": "1.0.0.0",
+  "parameters": {
+    "workspace": {
+      "type": "String"
+    }
+  },
+  "resources": [
+    {
+      "id": "[concat(resourceId('Microsoft.OperationalInsights/workspaces/providers', parameters('workspace'), 'Microsoft.SecurityInsights'),'/alertRules/7495f724-8eda-4b37-85b2-4eb87ed96ce9')]",
+      "name": "[concat(parameters('workspace'),'/Microsoft.SecurityInsights/7495f724-8eda-4b37-85b2-4eb87ed96ce9')]",
+      "type": "Microsoft.OperationalInsights/workspaces/providers/alertRules",
+      "kind": "Scheduled",
+      "apiVersion": "2023-02-01-preview",
+      "properties": {
+        "displayName": "User account enabled and disabled within 10 mins",
+        "description": "Identifies when a user account is enabled and then disabled within 10 minutes. This can be an indication of compromise and\nan adversary attempting to hide in the noise.",
+        "alertDetailsOverride": null,
+        "customDetails": null,
+        "entityMappings": [
+          {
+            "entityType": "Account",
+            "fieldMappings": [
+              {
+                "columnName": "AccountCustomEntity",
+                "identifier": "FullName"
+              }
+            ]
+          },
+          {
+            "entityType": "Host",
+            "fieldMappings": [
+              {
+                "columnName": "HostCustomEntity",
+                "identifier": "FullName"
+              }
+            ]
+          }
+        ],
+        "eventGroupingSettings": null,
+        "incidentConfiguration": {
+          "createIncident": true,
+          "groupingConfiguration": {
+            "enabled": false,
+            "groupByAlertDetails": null,
+            "groupByCustomDetails": null,
+            "groupByEntities": [],
+            "lookbackDuration": "PT5M",
+            "matchingMethod": "AllEntities",
+            "reopenClosedIncident": false
+          }
+        },
+        "query": "let timeframe = 1d;\nlet spanoftime = 10m;\nlet threshold = 0;\nSecurityEvent \n| where TimeGenerated > ago(2*timeframe) \n// A user account was enabled\n| where EventID == 4722\n| where AccountType =~ \"User\"\n| where TargetAccount !hassuffix \"$\"\n| project EnableTime = TimeGenerated, EnableEventID = EventID, EnableActivity = Activity, Computer, UserPrincipalName, \nAccountUsedToEnable = SubjectAccount, SIDofAccountUsedToEnable = SubjectUserSid, TargetAccount = tolower(TargetAccount), TargetSid\n| join kind= inner (\n  SecurityEvent\n  | where TimeGenerated > ago(timeframe) \n  // A user account was disabled \n  | where EventID == 4725\n| where AccountType =~ \"User\"\n| project DisableTime = TimeGenerated, DisableEventID = EventID, DisableActivity = Activity, Computer, UserPrincipalName, \nAccountUsedToDisable = SubjectAccount, SIDofAccountUsedToDisable = SubjectUserSid, TargetAccount = tolower(TargetAccount), TargetSid\n) on Computer, TargetAccount\n| where DisableTime - EnableTime < spanoftime\n| extend TimeDelta = DisableTime - EnableTime\n| where tolong(TimeDelta) >= threshold\n| project TimeDelta, EnableTime, EnableEventID, EnableActivity, Computer, TargetAccount, TargetSid, UserPrincipalName, AccountUsedToEnable, SIDofAccountUsedToEnable, \nDisableTime, DisableEventID, DisableActivity, AccountUsedToDisable, SIDofAccountUsedToDisable\n| extend timestamp = EnableTime, AccountCustomEntity = AccountUsedToEnable, HostCustomEntity = Computer\n",
+        "queryPeriod": "P2D",
+        "queryFrequency": "P1D",
+        "sentinelEntitiesMappings": null,
+        "severity": "Medium",
+        "suppressionDuration": "PT1H",
+        "suppressionEnabled": false,
+        "tactics": [
+          "Persistence",
+          "PrivilegeEscalation"
+        ],
+        "techniques": null,
+        "templateVersion": null,
+        "triggerOperator": "GreaterThan",
+        "triggerThreshold": 0,
+        "alertRuleTemplateName": null,
+        "enabled": false
+      }
+    }
+  ]
+}

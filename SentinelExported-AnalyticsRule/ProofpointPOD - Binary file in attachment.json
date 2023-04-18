@@ -1,0 +1,64 @@
+{
+  "$schema": "https://schema.management.azure.com/schemas/2019-04-01/deploymentTemplate.json#",
+  "contentVersion": "1.0.0.0",
+  "parameters": {
+    "workspace": {
+      "type": "String"
+    }
+  },
+  "resources": [
+    {
+      "id": "[concat(resourceId('Microsoft.OperationalInsights/workspaces/providers', parameters('workspace'), 'Microsoft.SecurityInsights'),'/alertRules/a01650c9-7fc6-4421-9493-d8a24d36683c')]",
+      "name": "[concat(parameters('workspace'),'/Microsoft.SecurityInsights/a01650c9-7fc6-4421-9493-d8a24d36683c')]",
+      "type": "Microsoft.OperationalInsights/workspaces/providers/alertRules",
+      "kind": "Scheduled",
+      "apiVersion": "2023-02-01-preview",
+      "properties": {
+        "displayName": "ProofpointPOD - Binary file in attachment",
+        "description": "Detects when email recieved with binary file as attachment.",
+        "alertDetailsOverride": null,
+        "customDetails": null,
+        "entityMappings": [
+          {
+            "entityType": "Account",
+            "fieldMappings": [
+              {
+                "columnName": "AccountCustomEntity",
+                "identifier": "FullName"
+              }
+            ]
+          }
+        ],
+        "eventGroupingSettings": null,
+        "incidentConfiguration": {
+          "createIncident": true,
+          "groupingConfiguration": {
+            "enabled": false,
+            "groupByAlertDetails": null,
+            "groupByCustomDetails": null,
+            "groupByEntities": [],
+            "lookbackDuration": "PT5M",
+            "matchingMethod": "AllEntities",
+            "reopenClosedIncident": false
+          }
+        },
+        "query": "let lbtime = 10m;\nProofpointPOD\n| where TimeGenerated > ago(lbtime)\n| where EventType == 'message'\n| where NetworkDirection == 'inbound'\n| where FilterDisposition !in ('reject', 'discard')\n| extend attachedMimeType = todynamic(MsgParts)[0]['detectedMime']\n| where attachedMimeType == 'application/zip'\n| project SrcUserUpn, DstUserUpn\n| extend AccountCustomEntity = DstUserUpn\n",
+        "queryPeriod": "PT10M",
+        "queryFrequency": "PT10M",
+        "sentinelEntitiesMappings": null,
+        "severity": "Medium",
+        "suppressionDuration": "PT1H",
+        "suppressionEnabled": false,
+        "tactics": [
+          "InitialAccess"
+        ],
+        "techniques": null,
+        "templateVersion": null,
+        "triggerOperator": "GreaterThan",
+        "triggerThreshold": 0,
+        "alertRuleTemplateName": null,
+        "enabled": false
+      }
+    }
+  ]
+}

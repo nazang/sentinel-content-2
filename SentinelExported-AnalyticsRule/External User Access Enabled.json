@@ -1,0 +1,65 @@
+{
+  "$schema": "https://schema.management.azure.com/schemas/2019-04-01/deploymentTemplate.json#",
+  "contentVersion": "1.0.0.0",
+  "parameters": {
+    "workspace": {
+      "type": "String"
+    }
+  },
+  "resources": [
+    {
+      "id": "[concat(resourceId('Microsoft.OperationalInsights/workspaces/providers', parameters('workspace'), 'Microsoft.SecurityInsights'),'/alertRules/95c5e5cc-5f9b-44b9-ae74-b730c17f1a39')]",
+      "name": "[concat(parameters('workspace'),'/Microsoft.SecurityInsights/95c5e5cc-5f9b-44b9-ae74-b730c17f1a39')]",
+      "type": "Microsoft.OperationalInsights/workspaces/providers/alertRules",
+      "kind": "Scheduled",
+      "apiVersion": "2023-02-01-preview",
+      "properties": {
+        "displayName": "External User Access Enabled",
+        "description": "This alerts when the account setting is changed to allow either external domain access or anonymous access to meetings.",
+        "alertDetailsOverride": null,
+        "customDetails": null,
+        "entityMappings": [
+          {
+            "entityType": "Account",
+            "fieldMappings": [
+              {
+                "columnName": "AccountCustomEntity",
+                "identifier": "FullName"
+              }
+            ]
+          }
+        ],
+        "eventGroupingSettings": null,
+        "incidentConfiguration": {
+          "createIncident": true,
+          "groupingConfiguration": {
+            "enabled": false,
+            "groupByAlertDetails": null,
+            "groupByCustomDetails": null,
+            "groupByEntities": [],
+            "lookbackDuration": "PT5M",
+            "matchingMethod": "AllEntities",
+            "reopenClosedIncident": false
+          }
+        },
+        "query": "\nZoomLogs \n| where Event =~ \"account.settings_updated\" \n| extend EnforceLogin = columnifexists(\"payload_object_settings_schedule_meeting_enfore_login_b\", \"\") \n| extend EnforceLoginDomain = columnifexists(\"payload_object_settings_schedule_meeting_enfore_login_b\", \"\") \n| extend GuestAlerts = columnifexists(\"payload_object_settings_in_meeting_alert_guest_join_b\", \"\") \n| where EnforceLogin == 'false' or EnforceLoginDomain == 'false' or GuestAlerts == 'false' \n| extend SettingChanged = case(EnforceLogin == 'false' and EnforceLoginDomain == 'false' and GuestAlerts == 'false', \"All settings changed\", \n                            EnforceLogin == 'false' and EnforceLoginDomain == 'false', \"Enforced Logons and Restricted Domains Changed\", \n                            EnforceLoginDomain == 'false' and GuestAlerts == 'false', \"Enforced Domains Changed\", \n                            EnforceLoginDomain == 'false', \"Enfored Domains Changed\", \n                            GuestAlerts == 'false', \"Guest Join Alerts Changed\", \n                            EnforceLogin == 'false', \"Enforced Logins Changed\", \n                            \"No Changes\")\n| extend timestamp = TimeGenerated, AccountCustomEntity = User\n",
+        "queryPeriod": "P1D",
+        "queryFrequency": "P1D",
+        "sentinelEntitiesMappings": null,
+        "severity": "Low",
+        "suppressionDuration": "PT1H",
+        "suppressionEnabled": false,
+        "tactics": [
+          "CredentialAccess",
+          "Persistence"
+        ],
+        "techniques": null,
+        "templateVersion": null,
+        "triggerOperator": "GreaterThan",
+        "triggerThreshold": 0,
+        "alertRuleTemplateName": null,
+        "enabled": false
+      }
+    }
+  ]
+}

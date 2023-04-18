@@ -1,0 +1,73 @@
+{
+  "$schema": "https://schema.management.azure.com/schemas/2019-04-01/deploymentTemplate.json#",
+  "contentVersion": "1.0.0.0",
+  "parameters": {
+    "workspace": {
+      "type": "String"
+    }
+  },
+  "resources": [
+    {
+      "id": "[concat(resourceId('Microsoft.OperationalInsights/workspaces/providers', parameters('workspace'), 'Microsoft.SecurityInsights'),'/alertRules/0c2b4f94-bf3a-4377-ad40-973304baa595')]",
+      "name": "[concat(parameters('workspace'),'/Microsoft.SecurityInsights/0c2b4f94-bf3a-4377-ad40-973304baa595')]",
+      "type": "Microsoft.OperationalInsights/workspaces/providers/alertRules",
+      "kind": "Scheduled",
+      "apiVersion": "2023-02-01-preview",
+      "properties": {
+        "displayName": "Brute force attack against Azure Portal",
+        "description": "Identifies evidence of brute force activity against Azure Portal by highlighting multiple authentication failures \nand by a successful authentication within a given time window. \n(The query does not enforce any sequence - eg requiring the successful authentication to occur last.)\nDefault Failure count is 5, Default Success count is 1 and default Time Window is 20 minutes.\nReferences: https://docs.microsoft.com/azure/active-directory/reports-monitoring/reference-sign-ins-error-codes.",
+        "alertDetailsOverride": null,
+        "customDetails": null,
+        "entityMappings": [
+          {
+            "entityType": "Account",
+            "fieldMappings": [
+              {
+                "columnName": "AccountCustomEntity",
+                "identifier": "FullName"
+              }
+            ]
+          },
+          {
+            "entityType": "IP",
+            "fieldMappings": [
+              {
+                "columnName": "IPCustomEntity",
+                "identifier": "Address"
+              }
+            ]
+          }
+        ],
+        "eventGroupingSettings": null,
+        "incidentConfiguration": {
+          "createIncident": true,
+          "groupingConfiguration": {
+            "enabled": false,
+            "groupByAlertDetails": null,
+            "groupByCustomDetails": null,
+            "groupByEntities": [],
+            "lookbackDuration": "PT5M",
+            "matchingMethod": "AllEntities",
+            "reopenClosedIncident": false
+          }
+        },
+        "query": "\nlet failureCountThreshold = 5;\nlet successCountThreshold = 1;\nlet authenticationWindow = 20m;\nlet aadFunc = (tableName:string){\ntable(tableName)\n| extend DeviceDetail = todynamic(DeviceDetail), Status = todynamic(DeviceDetail), LocationDetails = todynamic(LocationDetails)\n| extend OS = DeviceDetail.operatingSystem, Browser = DeviceDetail.browser\n| extend StatusCode = tostring(Status.errorCode), StatusDetails = tostring(Status.additionalDetails)\n| extend State = tostring(LocationDetails.state), City = tostring(LocationDetails.city), Region = tostring(LocationDetails.countryOrRegion)\n| where AppDisplayName has \"Azure Portal\"\n// Split out failure versus non-failure types\n| extend FailureOrSuccess = iff(ResultType in (\"0\", \"50125\", \"50140\", \"70043\", \"70044\"), \"Success\", \"Failure\")\n| summarize StartTime = min(TimeGenerated), EndTime = max(TimeGenerated), IPAddress = make_set(IPAddress), make_set(OS), make_set(Browser), make_set(City),\nmake_set(State), make_set(Region),make_set(ResultType), FailureCount = countif(FailureOrSuccess==\"Failure\"), SuccessCount = countif(FailureOrSuccess==\"Success\") \nby bin(TimeGenerated, authenticationWindow), UserDisplayName, UserPrincipalName, AppDisplayName, Type\n| where FailureCount >= failureCountThreshold and SuccessCount >= successCountThreshold\n| mvexpand IPAddress\n| extend IPAddress = tostring(IPAddress)\n| extend timestamp = StartTime, AccountCustomEntity = UserPrincipalName, IPCustomEntity = IPAddress \n};\nlet aadSignin = aadFunc(\"SigninLogs\");\nlet aadNonInt = aadFunc(\"AADNonInteractiveUserSignInLogs\");\nunion isfuzzy=true aadSignin, aadNonInt\n",
+        "queryPeriod": "P1D",
+        "queryFrequency": "P1D",
+        "sentinelEntitiesMappings": null,
+        "severity": "Medium",
+        "suppressionDuration": "PT1H",
+        "suppressionEnabled": false,
+        "tactics": [
+          "CredentialAccess"
+        ],
+        "techniques": null,
+        "templateVersion": null,
+        "triggerOperator": "GreaterThan",
+        "triggerThreshold": 0,
+        "alertRuleTemplateName": null,
+        "enabled": false
+      }
+    }
+  ]
+}

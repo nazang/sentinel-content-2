@@ -1,0 +1,64 @@
+{
+  "$schema": "https://schema.management.azure.com/schemas/2019-04-01/deploymentTemplate.json#",
+  "contentVersion": "1.0.0.0",
+  "parameters": {
+    "workspace": {
+      "type": "String"
+    }
+  },
+  "resources": [
+    {
+      "id": "[concat(resourceId('Microsoft.OperationalInsights/workspaces/providers', parameters('workspace'), 'Microsoft.SecurityInsights'),'/alertRules/b5276d94-2ef0-427e-84c8-0d70163ebef2')]",
+      "name": "[concat(parameters('workspace'),'/Microsoft.SecurityInsights/b5276d94-2ef0-427e-84c8-0d70163ebef2')]",
+      "type": "Microsoft.OperationalInsights/workspaces/providers/alertRules",
+      "kind": "Scheduled",
+      "apiVersion": "2023-02-01-preview",
+      "properties": {
+        "displayName": "ProofpointPOD - Suspicious attachment",
+        "description": "Detects when email contains suspicious attachment (file type).",
+        "alertDetailsOverride": null,
+        "customDetails": null,
+        "entityMappings": [
+          {
+            "entityType": "Account",
+            "fieldMappings": [
+              {
+                "columnName": "AccountCustomEntity",
+                "identifier": "FullName"
+              }
+            ]
+          }
+        ],
+        "eventGroupingSettings": null,
+        "incidentConfiguration": {
+          "createIncident": true,
+          "groupingConfiguration": {
+            "enabled": false,
+            "groupByAlertDetails": null,
+            "groupByCustomDetails": null,
+            "groupByEntities": [],
+            "lookbackDuration": "PT5M",
+            "matchingMethod": "AllEntities",
+            "reopenClosedIncident": false
+          }
+        },
+        "query": "let lbtime = 10m;\nlet disallowed_ext = dynamic(['ps1', 'exe', 'vbs', 'js', 'scr']);\nProofpointPOD\n| where TimeGenerated > ago(lbtime)\n| where EventType == 'message'\n| where NetworkDirection == 'inbound'\n| where FilterDisposition !in ('reject', 'discard')\n| extend attachedExt = todynamic(MsgParts)[0]['detectedExt']\n| where attachedExt in (disallowed_ext)\n| project SrcUserUpn, DstUserUpn\n| extend AccountCustomEntity = DstUserUpn\n",
+        "queryPeriod": "PT10M",
+        "queryFrequency": "PT10M",
+        "sentinelEntitiesMappings": null,
+        "severity": "Medium",
+        "suppressionDuration": "PT1H",
+        "suppressionEnabled": false,
+        "tactics": [
+          "InitialAccess"
+        ],
+        "techniques": null,
+        "templateVersion": null,
+        "triggerOperator": "GreaterThan",
+        "triggerThreshold": 0,
+        "alertRuleTemplateName": null,
+        "enabled": false
+      }
+    }
+  ]
+}

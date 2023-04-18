@@ -1,0 +1,73 @@
+{
+  "$schema": "https://schema.management.azure.com/schemas/2019-04-01/deploymentTemplate.json#",
+  "contentVersion": "1.0.0.0",
+  "parameters": {
+    "workspace": {
+      "type": "String"
+    }
+  },
+  "resources": [
+    {
+      "id": "[concat(resourceId('Microsoft.OperationalInsights/workspaces/providers', parameters('workspace'), 'Microsoft.SecurityInsights'),'/alertRules/53b36fdc-467d-4e6b-b665-60a15a0bd408')]",
+      "name": "[concat(parameters('workspace'),'/Microsoft.SecurityInsights/53b36fdc-467d-4e6b-b665-60a15a0bd408')]",
+      "type": "Microsoft.OperationalInsights/workspaces/providers/alertRules",
+      "kind": "Scheduled",
+      "apiVersion": "2023-02-01-preview",
+      "properties": {
+        "displayName": "DNS events related to ToR proxies (Normalized DNS)",
+        "description": "Identifies IP addresses performing DNS lookups associated with common ToR proxies.\nTo use this analytics rule, make sure you have deployed the [ASIM normalization parsers](https://aka.ms/AzSentinelDns)",
+        "alertDetailsOverride": null,
+        "customDetails": null,
+        "entityMappings": [
+          {
+            "entityType": "Host",
+            "fieldMappings": [
+              {
+                "columnName": "HostCustomEntity",
+                "identifier": "FullName"
+              }
+            ]
+          },
+          {
+            "entityType": "IP",
+            "fieldMappings": [
+              {
+                "columnName": "IPCustomEntity",
+                "identifier": "Address"
+              }
+            ]
+          }
+        ],
+        "eventGroupingSettings": null,
+        "incidentConfiguration": {
+          "createIncident": true,
+          "groupingConfiguration": {
+            "enabled": false,
+            "groupByAlertDetails": null,
+            "groupByCustomDetails": null,
+            "groupByEntities": [],
+            "lookbackDuration": "PT5M",
+            "matchingMethod": "AllEntities",
+            "reopenClosedIncident": false
+          }
+        },
+        "query": "let torProxies=dynamic([\"tor2web.org\", \"tor2web.com\", \"torlink.co\", \"onion.to\", \"onion.ink\", \"onion.cab\", \"onion.nu\", \"onion.link\", \n\"onion.it\", \"onion.city\", \"onion.direct\", \"onion.top\", \"onion.casa\", \"onion.plus\", \"onion.rip\", \"onion.dog\", \"tor2web.fi\", \n\"tor2web.blutmagie.de\", \"onion.sh\", \"onion.lu\", \"onion.pet\", \"t2w.pw\", \"tor2web.ae.org\", \"tor2web.io\", \"tor2web.xyz\", \"onion.lt\", \n\"s1.tor-gateways.de\", \"s2.tor-gateways.de\", \"s3.tor-gateways.de\", \"s4.tor-gateways.de\", \"s5.tor-gateways.de\", \"hiddenservice.net\"]);\nimDns(domain_has_any=torProxies)\n| extend timestamp = TimeGenerated, IPCustomEntity = SrcIpAddr, HostCustomEntity = Dvc\n",
+        "queryPeriod": "P1D",
+        "queryFrequency": "P1D",
+        "sentinelEntitiesMappings": null,
+        "severity": "Low",
+        "suppressionDuration": "PT1H",
+        "suppressionEnabled": false,
+        "tactics": [
+          "Exfiltration"
+        ],
+        "techniques": null,
+        "templateVersion": null,
+        "triggerOperator": "GreaterThan",
+        "triggerThreshold": 0,
+        "alertRuleTemplateName": null,
+        "enabled": false
+      }
+    }
+  ]
+}

@@ -1,0 +1,73 @@
+{
+  "$schema": "https://schema.management.azure.com/schemas/2019-04-01/deploymentTemplate.json#",
+  "contentVersion": "1.0.0.0",
+  "parameters": {
+    "workspace": {
+      "type": "String"
+    }
+  },
+  "resources": [
+    {
+      "id": "[concat(resourceId('Microsoft.OperationalInsights/workspaces/providers', parameters('workspace'), 'Microsoft.SecurityInsights'),'/alertRules/30f9dd89-d06c-4016-80e3-dd172593e670')]",
+      "name": "[concat(parameters('workspace'),'/Microsoft.SecurityInsights/30f9dd89-d06c-4016-80e3-dd172593e670')]",
+      "type": "Microsoft.OperationalInsights/workspaces/providers/alertRules",
+      "kind": "Scheduled",
+      "apiVersion": "2023-02-01-preview",
+      "properties": {
+        "displayName": "ClientDeniedAccess",
+        "description": "Creates an incident in the event a Client has an excessive amounts of denied access requests.",
+        "alertDetailsOverride": null,
+        "customDetails": null,
+        "entityMappings": [
+          {
+            "entityType": "Account",
+            "fieldMappings": [
+              {
+                "columnName": "AccountCustomEntity",
+                "identifier": "FullName"
+              }
+            ]
+          },
+          {
+            "entityType": "IP",
+            "fieldMappings": [
+              {
+                "columnName": "IPCustomEntity",
+                "identifier": "Address"
+              }
+            ]
+          }
+        ],
+        "eventGroupingSettings": null,
+        "incidentConfiguration": {
+          "createIncident": true,
+          "groupingConfiguration": {
+            "enabled": false,
+            "groupByAlertDetails": null,
+            "groupByCustomDetails": null,
+            "groupByEntities": [],
+            "lookbackDuration": "PT5M",
+            "matchingMethod": "AllEntities",
+            "reopenClosedIncident": false
+          }
+        },
+        "query": "\nlet threshold = 15;\nlet rejectedAccess = SymantecVIP\n| where isnotempty(RADIUSAuth)\n| where RADIUSAuth =~ \"Reject\"\n| summarize Total = count() by ClientIP, bin(TimeGenerated, 15m)\n| where Total > threshold\n| project ClientIP;\nSymantecVIP\n| where isnotempty(RADIUSAuth)\n| where RADIUSAuth =~ \"Reject\"\n| join kind=inner rejectedAccess on ClientIP\n| summarize StartTime = min(TimeGenerated), EndTime = max(TimeGenerated), count() by ClientIP, User\n| extend timestamp = StartTime, IPCustomEntity = ClientIP, AccountCustomEntity = User\n",
+        "queryPeriod": "PT1H",
+        "queryFrequency": "PT1H",
+        "sentinelEntitiesMappings": null,
+        "severity": "Medium",
+        "suppressionDuration": "PT1H",
+        "suppressionEnabled": false,
+        "tactics": [
+          "CredentialAccess"
+        ],
+        "techniques": null,
+        "templateVersion": null,
+        "triggerOperator": "GreaterThan",
+        "triggerThreshold": 0,
+        "alertRuleTemplateName": null,
+        "enabled": false
+      }
+    }
+  ]
+}

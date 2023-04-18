@@ -1,0 +1,54 @@
+{
+  "$schema": "https://schema.management.azure.com/schemas/2019-04-01/deploymentTemplate.json#",
+  "contentVersion": "1.0.0.0",
+  "parameters": {
+    "workspace": {
+      "type": "String"
+    }
+  },
+  "resources": [
+    {
+      "id": "[concat(resourceId('Microsoft.OperationalInsights/workspaces/providers', parameters('workspace'), 'Microsoft.SecurityInsights'),'/alertRules/5028495a-0ffb-455b-8f73-8ea0a9f60ba3')]",
+      "name": "[concat(parameters('workspace'),'/Microsoft.SecurityInsights/5028495a-0ffb-455b-8f73-8ea0a9f60ba3')]",
+      "type": "Microsoft.OperationalInsights/workspaces/providers/alertRules",
+      "kind": "Scheduled",
+      "apiVersion": "2023-02-01-preview",
+      "properties": {
+        "displayName": "Vectra Detection - Insights",
+        "description": "This query searches for Info Detections triggered by one of the Vectra AI models. \nThose are informative, providing security insights, and do not influence the score assigned to the Host.  They provide useful context to a Host or Account for an investigation.\nSome examples: New role seen for a host (e.g DNS server), novel port (used for the first time from this host), etc.",
+        "alertDetailsOverride": null,
+        "customDetails": null,
+        "entityMappings": null,
+        "eventGroupingSettings": null,
+        "incidentConfiguration": {
+          "createIncident": true,
+          "groupingConfiguration": {
+            "enabled": false,
+            "groupByAlertDetails": null,
+            "groupByCustomDetails": null,
+            "groupByEntities": [],
+            "lookbackDuration": "PT5M",
+            "matchingMethod": "AllEntities",
+            "reopenClosedIncident": false
+          }
+        },
+        "query": "CommonSecurityLog\n| where DeviceVendor == \"Vectra Networks\"\n| where DeviceProduct == \"X Series\"\n| where DeviceEventClassID != \"campaigns\" and DeviceEventClassID != \"hsc\" and DeviceEventClassID != \"audit\" and DeviceEventClassID != \"health\" and DeviceEventClassID != \"asc\" \n| extend cat = extract(\"cat=(.+?);\", 1, AdditionalExtensions) \n| where cat == \"INFO\"\n| project-rename triaged = DeviceCustomString5\n| project-rename vectra_URL = DeviceCustomString4\n| project-rename detection_name = DeviceEventClassID\n| summarize arg_max(TimeGenerated, *) by SourceHostName, detection_name\n| project SourceHostName, SourceIP, DestinationIP, DestinationPort, DestinationHostName, detection_name, cat, triaged, vectra_URL\n",
+        "queryPeriod": "PT1H",
+        "queryFrequency": "PT1H",
+        "sentinelEntitiesMappings": null,
+        "severity": "Low",
+        "suppressionDuration": "PT1H",
+        "suppressionEnabled": false,
+        "tactics": [
+          "LateralMovement"
+        ],
+        "techniques": null,
+        "templateVersion": null,
+        "triggerOperator": "GreaterThan",
+        "triggerThreshold": 0,
+        "alertRuleTemplateName": null,
+        "enabled": false
+      }
+    }
+  ]
+}
