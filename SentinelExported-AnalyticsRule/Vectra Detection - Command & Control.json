@@ -1,0 +1,54 @@
+{
+  "$schema": "https://schema.management.azure.com/schemas/2019-04-01/deploymentTemplate.json#",
+  "contentVersion": "1.0.0.0",
+  "parameters": {
+    "workspace": {
+      "type": "String"
+    }
+  },
+  "resources": [
+    {
+      "id": "[concat(resourceId('Microsoft.OperationalInsights/workspaces/providers', parameters('workspace'), 'Microsoft.SecurityInsights'),'/alertRules/37d82d88-bb8d-441c-a744-7df414890618')]",
+      "name": "[concat(parameters('workspace'),'/Microsoft.SecurityInsights/37d82d88-bb8d-441c-a744-7df414890618')]",
+      "type": "Microsoft.OperationalInsights/workspaces/providers/alertRules",
+      "kind": "Scheduled",
+      "apiVersion": "2023-02-01-preview",
+      "properties": {
+        "displayName": "Vectra Detection - Command & Control",
+        "description": "This query searches for Command and Control Detections triggered by one of Detect's AI models.",
+        "alertDetailsOverride": null,
+        "customDetails": null,
+        "entityMappings": null,
+        "eventGroupingSettings": null,
+        "incidentConfiguration": {
+          "createIncident": true,
+          "groupingConfiguration": {
+            "enabled": false,
+            "groupByAlertDetails": null,
+            "groupByCustomDetails": null,
+            "groupByEntities": [],
+            "lookbackDuration": "PT5M",
+            "matchingMethod": "AllEntities",
+            "reopenClosedIncident": false
+          }
+        },
+        "query": "CommonSecurityLog\n| where DeviceVendor == \"Vectra Networks\"\n| where DeviceProduct == \"X Series\"\n| where DeviceEventClassID != \"campaigns\" and DeviceEventClassID != \"hsc\" and DeviceEventClassID != \"audit\" and DeviceEventClassID != \"health\" and DeviceEventClassID != \"asc\" \n| extend cat = extract(\"cat=(.+?);\", 1, AdditionalExtensions) \n| where cat == \"COMMAND & CONTROL\" \n| project-rename threat_score = FlexNumber1\n| project-rename certainty_score = FlexNumber2\n| project-rename triaged = DeviceCustomString5\n| project-rename vectra_URL = DeviceCustomString4\n| project-rename detection_name = DeviceEventClassID\n| summarize arg_max(threat_score, *) by SourceHostName, detection_name\n| project  SourceHostName, SourceIP, DestinationIP, DestinationPort, DestinationHostName, detection_name, cat, threat_score, certainty_score, triaged, vectra_URL\n",
+        "queryPeriod": "PT1H",
+        "queryFrequency": "PT1H",
+        "sentinelEntitiesMappings": null,
+        "severity": "Medium",
+        "suppressionDuration": "PT1H",
+        "suppressionEnabled": false,
+        "tactics": [
+          "CommandAndControl"
+        ],
+        "techniques": null,
+        "templateVersion": null,
+        "triggerOperator": "GreaterThan",
+        "triggerThreshold": 0,
+        "alertRuleTemplateName": null,
+        "enabled": false
+      }
+    }
+  ]
+}
