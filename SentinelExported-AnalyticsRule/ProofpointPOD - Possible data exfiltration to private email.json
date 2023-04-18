@@ -1,0 +1,64 @@
+{
+  "$schema": "https://schema.management.azure.com/schemas/2019-04-01/deploymentTemplate.json#",
+  "contentVersion": "1.0.0.0",
+  "parameters": {
+    "workspace": {
+      "type": "String"
+    }
+  },
+  "resources": [
+    {
+      "id": "[concat(resourceId('Microsoft.OperationalInsights/workspaces/providers', parameters('workspace'), 'Microsoft.SecurityInsights'),'/alertRules/b37d6dd3-9882-4a22-ba59-7bb6ebd080cd')]",
+      "name": "[concat(parameters('workspace'),'/Microsoft.SecurityInsights/b37d6dd3-9882-4a22-ba59-7bb6ebd080cd')]",
+      "type": "Microsoft.OperationalInsights/workspaces/providers/alertRules",
+      "kind": "Scheduled",
+      "apiVersion": "2023-02-01-preview",
+      "properties": {
+        "displayName": "ProofpointPOD - Possible data exfiltration to private email",
+        "description": "Detects when sender sent email to the non-corporate domain and recipient's username is the same as sender's username.",
+        "alertDetailsOverride": null,
+        "customDetails": null,
+        "entityMappings": [
+          {
+            "entityType": "Account",
+            "fieldMappings": [
+              {
+                "columnName": "AccountCustomEntity",
+                "identifier": "FullName"
+              }
+            ]
+          }
+        ],
+        "eventGroupingSettings": null,
+        "incidentConfiguration": {
+          "createIncident": true,
+          "groupingConfiguration": {
+            "enabled": false,
+            "groupByAlertDetails": null,
+            "groupByCustomDetails": null,
+            "groupByEntities": [],
+            "lookbackDuration": "PT5M",
+            "matchingMethod": "AllEntities",
+            "reopenClosedIncident": false
+          }
+        },
+        "query": "let lbtime = 10m;\nProofpointPOD\n| where TimeGenerated > ago(lbtime)\n| where EventType == 'message'\n| where NetworkDirection == 'outbound'\n| where array_length(todynamic(DstUserUpn)) == 1\n| extend sender = extract(@'\\A(.*?)@', 1, SrcUserUpn)\n| extend sender_domain = extract(@'@(.*)$', 1, SrcUserUpn)\n| extend recipient = extract(@'\\A(.*?)@', 1, tostring(todynamic(DstUserUpn)[0]))\n| extend recipient_domain = extract(@'@(.*)$', 1, tostring(todynamic(DstUserUpn)[0]))\n| where sender =~ recipient\n| where sender_domain != recipient_domain\n| project SrcUserUpn, DstUserUpn\n| extend AccountCustomEntity = SrcUserUpn\n",
+        "queryPeriod": "PT10M",
+        "queryFrequency": "PT10M",
+        "sentinelEntitiesMappings": null,
+        "severity": "Medium",
+        "suppressionDuration": "PT1H",
+        "suppressionEnabled": false,
+        "tactics": [
+          "InitialAccess"
+        ],
+        "techniques": null,
+        "templateVersion": null,
+        "triggerOperator": "GreaterThan",
+        "triggerThreshold": 0,
+        "alertRuleTemplateName": null,
+        "enabled": false
+      }
+    }
+  ]
+}
