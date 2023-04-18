@@ -1,0 +1,73 @@
+{
+  "$schema": "https://schema.management.azure.com/schemas/2019-04-01/deploymentTemplate.json#",
+  "contentVersion": "1.0.0.0",
+  "parameters": {
+    "workspace": {
+      "type": "String"
+    }
+  },
+  "resources": [
+    {
+      "id": "[concat(resourceId('Microsoft.OperationalInsights/workspaces/providers', parameters('workspace'), 'Microsoft.SecurityInsights'),'/alertRules/d71da679-6c46-4bae-9a52-6a15e127af60')]",
+      "name": "[concat(parameters('workspace'),'/Microsoft.SecurityInsights/d71da679-6c46-4bae-9a52-6a15e127af60')]",
+      "type": "Microsoft.OperationalInsights/workspaces/providers/alertRules",
+      "kind": "Scheduled",
+      "apiVersion": "2023-02-01-preview",
+      "properties": {
+        "displayName": "Failed logon attempts in authpriv",
+        "description": "Identifies failed logon attempts from unknown users in Syslog authpriv logs. The unknown user means the account that tried to log in \nisn't provisioned on the machine. A few hits could indicate someone attempting to access a machine they aren't authorized to access. \nIf there are many of hits, especially from outside your network, it could indicate a brute force attack. \nDefault threshold for logon attempts is 15.",
+        "alertDetailsOverride": null,
+        "customDetails": null,
+        "entityMappings": [
+          {
+            "entityType": "Host",
+            "fieldMappings": [
+              {
+                "columnName": "HostCustomEntity",
+                "identifier": "FullName"
+              }
+            ]
+          },
+          {
+            "entityType": "IP",
+            "fieldMappings": [
+              {
+                "columnName": "IPCustomEntity",
+                "identifier": "Address"
+              }
+            ]
+          }
+        ],
+        "eventGroupingSettings": null,
+        "incidentConfiguration": {
+          "createIncident": true,
+          "groupingConfiguration": {
+            "enabled": false,
+            "groupByAlertDetails": null,
+            "groupByCustomDetails": null,
+            "groupByEntities": [],
+            "lookbackDuration": "PT5M",
+            "matchingMethod": "AllEntities",
+            "reopenClosedIncident": false
+          }
+        },
+        "query": "\nlet threshold = 15;\n// Below pulls messages from syslog-authpriv logs where there was an authentication failure with an unknown user.\n// IP address of system attempting logon is also extracted from the SyslogMessage field. Some of these messages\n// are aggregated.\nlet authfail = Syslog\n| where Facility =~ \"authpriv\"   // looks at authpriv messages\n| where SyslogMessage contains \"authentication failure\" and SyslogMessage contains \" uid=0\"\n| parse SyslogMessage with * \"rhost=\" ExternalIP\n| project TimeGenerated, Computer, ProcessName, HostIP, ExternalIP, ProcessID;  \n// Below pulls messages from syslog-authpriv logs that show each instance an unknown user tried to logon. \nlet userfail = Syslog \n| where Facility =~ \"authpriv\" \n| where SyslogMessage contains \"user unknown\"\n| project TimeGenerated, Computer, HostIP, ProcessID;\n// Join the two log messages above\nlet userauthfail = authfail | join (userfail) on Computer, HostIP, ProcessID\n| project TimeGenerated, Computer, HostIP, ExternalIP, ProcessID ;\n// Extract the EventTime of the first logon attempt\nlet firstfail = userauthfail\n| summarize arg_min(TimeGenerated, *) by Computer, ExternalIP\n| project Computer, ExternalIP, FirstLogonAttempt = TimeGenerated;\n// Extract the EventTime of the last logon attempt\nlet lastfail = userauthfail\n| summarize arg_max(TimeGenerated, *) by Computer, ExternalIP\n| project Computer, ExternalIP, LatestLogonAttempt = TimeGenerated;\n// Join first and last logon attempt data and calculate the time between them (AttemptPeriodLength).\nlet faildates = firstfail | join (lastfail) on Computer, ExternalIP\n| project ExternalIP, Computer, FirstLogonAttempt, LatestLogonAttempt, TimeBetweenLogonAttempts = LatestLogonAttempt - FirstLogonAttempt;\n// Count the number of failed logon attempts by External IP and internal machine\nlet totalfails = userauthfail\n| summarize StartTimeUtc = min(TimeGenerated), EndTimeUtc = max(TimeGenerated), TotalLogonAttempts = count() by ExternalIP, Computer, HostIP\n| project StartTimeUtc, EndTimeUtc, ExternalIP, Computer, HostIP, TotalLogonAttempts;\n// Combine total attempts with timing data from above\nlet finalfails = totalfails | join (faildates) on Computer, ExternalIP\n| project StartTimeUtc, EndTimeUtc, SourceAddress = ExternalIP, DestinationHost = Computer, DestinationIP = HostIP, TotalLogonAttempts, FirstLogonAttempt, LatestLogonAttempt, TimeBetweenLogonAttempts\n| order by DestinationHost asc nulls last;\nfinalfails \n| where TotalLogonAttempts >= threshold\n| extend timestamp = StartTimeUtc, HostCustomEntity = DestinationHost, IPCustomEntity = DestinationIP\n",
+        "queryPeriod": "P1D",
+        "queryFrequency": "P1D",
+        "sentinelEntitiesMappings": null,
+        "severity": "Medium",
+        "suppressionDuration": "PT1H",
+        "suppressionEnabled": false,
+        "tactics": [
+          "CredentialAccess"
+        ],
+        "techniques": null,
+        "templateVersion": null,
+        "triggerOperator": "GreaterThan",
+        "triggerThreshold": 0,
+        "alertRuleTemplateName": null,
+        "enabled": false
+      }
+    }
+  ]
+}
