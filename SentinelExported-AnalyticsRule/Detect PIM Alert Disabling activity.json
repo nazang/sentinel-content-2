@@ -1,0 +1,74 @@
+{
+  "$schema": "https://schema.management.azure.com/schemas/2019-04-01/deploymentTemplate.json#",
+  "contentVersion": "1.0.0.0",
+  "parameters": {
+    "workspace": {
+      "type": "String"
+    }
+  },
+  "resources": [
+    {
+      "id": "[concat(resourceId('Microsoft.OperationalInsights/workspaces/providers', parameters('workspace'), 'Microsoft.SecurityInsights'),'/alertRules/8791ef9c-885f-407e-9740-159b355cd6e8')]",
+      "name": "[concat(parameters('workspace'),'/Microsoft.SecurityInsights/8791ef9c-885f-407e-9740-159b355cd6e8')]",
+      "type": "Microsoft.OperationalInsights/workspaces/providers/alertRules",
+      "kind": "Scheduled",
+      "apiVersion": "2023-02-01-preview",
+      "properties": {
+        "displayName": "Detect PIM Alert Disabling activity",
+        "description": "Privileged Identity Management (PIM) generates alerts when there is suspicious or unsafe activity in Azure Active Directory (Azure AD) organization. \nThis query will help detect attackers attempts to disable in product PIM alerts which are associated with Azure MFA requirements and could indicate activation of privileged access",
+        "alertDetailsOverride": null,
+        "customDetails": null,
+        "entityMappings": [
+          {
+            "entityType": "Account",
+            "fieldMappings": [
+              {
+                "columnName": "AccountCustomEntity",
+                "identifier": "FullName"
+              }
+            ]
+          },
+          {
+            "entityType": "IP",
+            "fieldMappings": [
+              {
+                "columnName": "IPCustomEntity",
+                "identifier": "Address"
+              }
+            ]
+          }
+        ],
+        "eventGroupingSettings": null,
+        "incidentConfiguration": {
+          "createIncident": true,
+          "groupingConfiguration": {
+            "enabled": false,
+            "groupByAlertDetails": null,
+            "groupByCustomDetails": null,
+            "groupByEntities": [],
+            "lookbackDuration": "PT5M",
+            "matchingMethod": "AllEntities",
+            "reopenClosedIncident": false
+          }
+        },
+        "query": "AuditLogs\n| where LoggedByService =~ \"PIM\"\n| where Category =~ \"RoleManagement\"\n| where ActivityDisplayName has \"Disable PIM Alert\"\n| extend IpAddress = case(\n  isnotempty(tostring(parse_json(tostring(InitiatedBy.user)).ipAddress)) and tostring(parse_json(tostring(InitiatedBy.user)).ipAddress) != 'null', tostring(parse_json(tostring(InitiatedBy.user)).ipAddress), \n  isnotempty(tostring(parse_json(tostring(InitiatedBy.app)).ipAddress)) and tostring(parse_json(tostring(InitiatedBy.app)).ipAddress) != 'null', tostring(parse_json(tostring(InitiatedBy.app)).ipAddress),\n  'Not Available')\n| extend InitiatedBy = iff(isnotempty(tostring(parse_json(tostring(InitiatedBy.user)).userPrincipalName)), \n  tostring(parse_json(tostring(InitiatedBy.user)).userPrincipalName), tostring(parse_json(tostring(InitiatedBy.app)).displayName)), UserRoles = tostring(parse_json(tostring(InitiatedBy.user)).ipAddress)\n| project InitiatedBy, ActivityDateTime, ActivityDisplayName, IpAddress, AADOperationType, AADTenantId, ResourceId, CorrelationId, Identity\n| extend timestamp = ActivityDateTime, IPCustomEntity = IpAddress, AccountCustomEntity = tolower(InitiatedBy), ResourceCustomEntity = ResourceId\n",
+        "queryPeriod": "P1D",
+        "queryFrequency": "P1D",
+        "sentinelEntitiesMappings": null,
+        "severity": "Medium",
+        "suppressionDuration": "PT1H",
+        "suppressionEnabled": false,
+        "tactics": [
+          "Persistence",
+          "PrivilegeEscalation"
+        ],
+        "techniques": null,
+        "templateVersion": null,
+        "triggerOperator": "GreaterThan",
+        "triggerThreshold": 0,
+        "alertRuleTemplateName": null,
+        "enabled": false
+      }
+    }
+  ]
+}
